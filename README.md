@@ -1,6 +1,6 @@
 # chatgpt-document
 
-从 AI 对话记录（ChatGPT、Gemini、Perplexity）抓取或导入内容，经大模型分类整理、生成深度报告，支持报告 1.0 → 专家评审 → 报告 2.0 → 报告 3.0 最终版。
+从 AI 对话记录（ChatGPT、Gemini、Perplexity）抓取或导入内容，经大模型分类整理、生成深度报告，支持报告 1.0 → 专家评审 → 报告 2.0 → 报告 3.0 最终版 → 报告 4.0（事实核查与引用）。
 
 ## 核心特性
 
@@ -55,6 +55,7 @@ all：全流程一条龙
 | Step3 | experts | 报告1.0 | 五位专家意见、幻觉清单、专家意见汇总 |
 | Step4 | report-v2 | 报告1.0 + 专家意见 + 原始语料 | `output/reports/{name}_report_v2.md`、`.docx` |
 | Step5 | report-final | 报告2.0 + 原始语料 | `output/reports/{name}_report_v3.md`、`.docx` |
+| Step6 | report-v4 | 报告3.0 | `output/reports/{name}_report_v4.md`、`.docx`（含 References 引用） |
 
 ### 二、本地文档语料合并（merge / batch）
 
@@ -131,12 +132,19 @@ python main.py batch ./my_corpus_dir -o 输出名 -r -s A -p gemini
 - **风格**：A=商业模式设计报告；B=可行性研究报告；C=学术综述
 - **输出**：`{name}_report_v3.md`、`{name}_report_v3.docx`
 
+#### Step6 报告 4.0（report-v4）— 事实核查与引用
+
+- **输入**：报告 3.0 路径（支持 `.md` 或 `.docx`）
+- **处理**：按章节将内容提交 **Perplexity API**，自动分析实体、事件、数据等事实并标注出处 → 在正文插入 `[n]` 引用标记 → 文末生成 References 列表（调用次数 = 章节数）
+- **依赖**：需配置 `PERPLEXITY_API_KEY`（.env），Perplexity 模型默认 `sonar`
+- **输出**：`{name}_report_v4.md`、`{name}_report_v4.docx`
+
 ### 四、输出目录结构
 
 ```
 output/
 ├── raw/          # 原始语料
-├── reports/      # 报告 1.0 / 2.0 / 3.0（.md / .docx）
+├── reports/      # 报告 1.0 / 2.0 / 3.0 / 4.0（.md / .docx）
 └── experts/      # 专家意见
 ```
 
@@ -171,6 +179,11 @@ python main.py report-v2 output/reports/xxx_report_v1.md -r output/raw/xxx.txt -
 
 # Step5：报告 3.0 最终版（必须传入原始语料用于幻觉校验）
 python main.py report-final output/reports/xxx_report_v2.md -r output/raw/xxx.txt -o xxx -s A
+
+# Step6：报告 4.0（事实核查与引用，需配置 PERPLEXITY_API_KEY）
+python main.py report-v4 output/reports/xxx_report_v3.md -o xxx
+# 或使用 .docx 输入：
+python main.py report-v4 output/reports/xxx_report_v3.docx -o xxx
 ```
 
 ---
@@ -192,6 +205,7 @@ python main.py report-final output/reports/xxx_report_v2.md -r output/raw/xxx.tx
 |------|------|
 | **merge** | 本地文档语料合并：读取目录下 Word/PDF/图片等，经 API 去重排序后合成为 output/raw/xxx.txt |
 | **batch** | 目录语料重整 + 全流程（1.0 → 专家 → 2.0 → 3.0），支持 `-p` 指定 API |
+| **report-v4** | 对报告 3.0 做事实核查与引用，调用 Perplexity 获取出处，生成 4.0（含 References） |
 | **all-v3** | fetch → report-v3（从原始语料直接生成 3.0，不走专家流程） |
 | **all-context** | 多轮 Kimi 会话（保持记忆）→ 1.0 → 专家 → 2.0 |
 | **install-browser** | 安装 Playwright Chromium（爬虫备用） |

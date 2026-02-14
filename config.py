@@ -34,7 +34,7 @@ GROK_MODEL = _env("GROK_MODEL", "grok-2")
 # ============ Perplexity ============
 PERPLEXITY_API_KEY = _env("PERPLEXITY_API_KEY")
 PERPLEXITY_BASE_URL = "https://api.perplexity.ai"
-PERPLEXITY_MODEL = _env("PERPLEXITY_MODEL", "llama-3.1-sonar-small-128k-online")
+PERPLEXITY_MODEL = _env("PERPLEXITY_MODEL", "sonar")
 
 # ============ Anthropic（Claude） ============
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")

@@ -169,6 +169,64 @@ def chat(
     return _openai_compatible_chat("kimi", messages, model, max_tokens, temperature)
 
 
+def perplexity_chat_with_citations(
+    messages: list,
+    model: str = None,
+    max_tokens: int = 4096,
+    temperature: float = 0.3,
+) -> tuple[str, list[dict]]:
+    """
+    调用 Perplexity API，返回 (content, citations)。
+    citations 格式: [{"url": str, "title": str}, ...]，来自 search_results 或 citations。
+    """
+    if not PERPLEXITY_API_KEY:
+        raise ValueError("请设置 PERPLEXITY_API_KEY 或在 .env 中配置")
+    cfg = PROVIDER_CONFIG["perplexity"]
+    url = (cfg.get("base_url") or "https://api.perplexity.ai").rstrip("/") + "/chat/completions"
+    m = model or cfg.get("model", "sonar")
+    payload = {
+        "model": m,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    resp = httpx.post(
+        url,
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        timeout=HTTP_TIMEOUT,
+    )
+    if resp.status_code >= 400:
+        try:
+            err_body = resp.text[:500] if resp.text else "(empty)"
+            raise RuntimeError(f"Perplexity API {resp.status_code}: {err_body}")
+        except RuntimeError:
+            raise
+    resp.raise_for_status()
+    data = resp.json()
+    content = ""
+    if data.get("choices") and len(data["choices"]) > 0:
+        msg = data["choices"][0].get("message", {})
+        content = (msg.get("content") or "").strip()
+    citations: list[dict] = []
+    search_results = data.get("search_results") or []
+    for r in search_results:
+        if isinstance(r, dict) and r.get("url"):
+            citations.append({
+                "url": r["url"],
+                "title": r.get("title") or r["url"],
+            })
+    if not citations and data.get("citations"):
+        for c in data["citations"]:
+            u = c if isinstance(c, str) else (c.get("url") or "")
+            if u:
+                citations.append({"url": u, "title": u})
+    return content, citations
+
+
 def chat_vision(
     messages: list,
     provider: str = None,

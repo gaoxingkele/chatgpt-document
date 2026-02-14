@@ -140,6 +140,15 @@ def cmd_report_v2(args):
     run_report_v2_and_docx(report_v1, expert, args.output_base, raw_path)
 
 
+def cmd_report_v4(args):
+    """报告 4.0：对 3.0 做事实核查与出处标注，调用 Perplexity 获取引用，在正文插入 [n] 标记并生成 References。"""
+    from src.step6_report_v4 import run_report_v4
+    report_v3 = Path(args.report_v3)
+    if not report_v3.is_absolute():
+        report_v3 = REPORT_DIR / report_v3.name
+    run_report_v4(report_v3, args.output_base)
+
+
 def cmd_report_final(args):
     """报告 3.0 最终版：在 2.0 基础上改写，列表→自然叙述，支持风格 A/B/C；须传入原始语料用于幻觉校验。"""
     from src.step5_report_final import run_report_final
@@ -279,6 +288,11 @@ def main():
 
     # step5
     p5 = sub.add_parser("report-final", help="Step5: 在报告 2.0 基础上生成 3.0 最终版（列表→自然叙述，可指定风格，须传入原始语料用于幻觉校验）")
+    # step6
+    p6 = sub.add_parser("report-v4", help="Step6: 对报告 3.0 做事实核查与出处标注，调用 Perplexity 获取引用，生成 4.0（含 References）")
+    p6.add_argument("report_v3", help="报告 3.0 路径，如 output/reports/xxx_report_v3.md")
+    p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    p6.set_defaults(func=cmd_report_v4)
     p5.add_argument("report_v2", help="报告 2.0 路径，如 output/reports/xxx_report_v2.md")
     p5.add_argument("-r", "--raw-file", required=True, help="原始语料路径（必填，用于幻觉校验）")
     p5.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
