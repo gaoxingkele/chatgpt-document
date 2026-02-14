@@ -79,6 +79,18 @@ def cmd_report_v2(args):
     run_report_v2_and_docx(report_v1, expert, args.output_base, raw_path)
 
 
+def cmd_report_final(args):
+    """报告 3.0 最终版：在 2.0 基础上改写，列表→自然叙述，支持风格 A/B/C；须传入原始语料用于幻觉校验。"""
+    from src.step5_report_final import run_report_final
+    report_v2 = Path(args.report_v2)
+    if not report_v2.is_absolute():
+        report_v2 = REPORT_DIR / report_v2.name
+    raw_path = Path(args.raw_file) if getattr(args, "raw_file", None) else None
+    if raw_path and not raw_path.is_absolute():
+        raw_path = RAW_DIR / raw_path.name
+    run_report_final(report_v2, args.output_base, args.style, raw_path)
+
+
 def cmd_all_v3(args):
     """全流程：抓取/导入 → 报告 3.0"""
     from src.ingest.sources import run_ingest, detect_source
@@ -89,15 +101,40 @@ def cmd_all_v3(args):
 
 
 def cmd_all(args):
-    """全流程：抓取/导入 → 报告1.0 → 专家 → 报告2.0+Word"""
+    """全流程：抓取/导入 → 报告1.0 → 专家 → 报告2.0 → 报告3.0 最终版+Word"""
+    import time
+    t_start = time.time()
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ========== 全流程开始 ==========", flush=True)
+    print(f"[{ts}] 输入: {args.input}", flush=True)
+    print(f"[{ts}] ======================================\n", flush=True)
+
     from src.step2_report_v1 import run_meta_and_report_v1
     from src.ingest.sources import run_ingest
     raw_path = run_ingest(args.input, args.output)
     base = args.output or (raw_path.stem if raw_path else "share")
+    style = getattr(args, "final_style", "A")
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step2 报告 1.0 ----------\n", flush=True)
     r1 = run_meta_and_report_v1(raw_path, base)
     report_v1_path = Path(r1["report_v1_path"])
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step3 专家评审 ----------\n", flush=True)
     cmd_experts(argparse.Namespace(report_v1=report_v1_path, output_base=base))
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step4 报告 2.0 ----------\n", flush=True)
     cmd_report_v2(argparse.Namespace(report_v1=report_v1_path, expert_file=None, output_base=base, raw_file=raw_path))
+    report_v2_path = REPORT_DIR / f"{base}_report_v2.md"
+    if not report_v2_path.is_file():
+        report_v2_path = REPORT_DIR / f"{base}_report_v2_new.md"
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step5 报告 3.0 最终版 ----------\n", flush=True)
+    cmd_report_final(argparse.Namespace(report_v2=report_v2_path, output_base=base, style=style, raw_file=raw_path))
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    elapsed = time.time() - t_start
+    print(f"\n[{ts}] ========== 全流程完成，总耗时 {elapsed/60:.1f} 分钟 ==========\n", flush=True)
 
 
 def cmd_all_context(args):
@@ -161,10 +198,21 @@ def main():
     p4.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     p4.set_defaults(func=cmd_report_v2)
 
+    # step5
+    p5 = sub.add_parser("report-final", help="Step5: 在报告 2.0 基础上生成 3.0 最终版（列表→自然叙述，可指定风格，须传入原始语料用于幻觉校验）")
+    p5.add_argument("report_v2", help="报告 2.0 路径，如 output/reports/xxx_report_v2.md")
+    p5.add_argument("-r", "--raw-file", required=True, help="原始语料路径（必填，用于幻觉校验）")
+    p5.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    p5.add_argument("-s", "--style", default="A", choices=["A", "B", "C"],
+                    help="文档风格: A=商业模式设计报告, B=可行性研究报告, C=学术综述")
+    p5.set_defaults(func=cmd_report_final)
+
     # all（含 Perplexity 本地 .md：下载页面后，文件路径由命令行传入）
-    p0 = sub.add_parser("all", help="全流程：导入/抓取 → 报告1.0 → 专家评审 → 报告2.0+Word")
+    p0 = sub.add_parser("all", help="全流程：导入/抓取 → 报告1.0 → 专家 → 报告2.0 → 报告3.0 最终版+Word")
     p0.add_argument("input", help="本地文件路径（如 Perplexity 下载的 .md）或分享链接，由命令行传入")
     p0.add_argument("-o", "--output", default=None, help="各步骤输出文件名前缀")
+    p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"],
+                    help="报告3.0风格: A=商业模式设计报告, B=可行性研究报告, C=学术综述")
     p0.set_defaults(func=cmd_all)
 
     # all-v3

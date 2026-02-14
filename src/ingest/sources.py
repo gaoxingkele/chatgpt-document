@@ -3,9 +3,15 @@
 多平台采集入口：根据 URL 或文件路径自动识别来源并分发到对应处理器。
 """
 import re
+import time
 from pathlib import Path
 
 from config import RAW_DIR, PROJECT_ROOT, MIN_CONTENT_BYTES
+
+
+def _log(msg: str):
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"[{ts}] {msg}", flush=True)
 
 # URL 模式 → 平台标识
 _URL_PATTERNS = [
@@ -60,16 +66,22 @@ def run_ingest(input_str: str, output_name: str = None) -> Path:
     """
     src = detect_source(input_str)
     path = Path(input_str.strip())
+    _log("=" * 60)
+    _log("采集阶段：开始")
+    _log(f"输入: {input_str[:80]}{'...' if len(input_str) > 80 else ''}")
+    _log(f"来源: {'本地文件' if src == 'file' else src}")
 
     if src == "file":
         from .file_importer import import_from_file
         path = _resolve_file_path(input_str)
+        _log("读取本地文件中...")
         if not path.is_file():
             raise FileNotFoundError(f"文件不存在: {path}，请检查路径是否正确")
         content = import_from_file(path)
         name = output_name or path.stem
     else:
         from .crawlers import crawl_url
+        _log("API/爬虫: 抓取 URL 中...")
         content = crawl_url(input_str, platform=src)
         name = output_name or _slug_from_input(input_str, src)
 
@@ -77,9 +89,8 @@ def run_ingest(input_str: str, output_name: str = None) -> Path:
     size = len(content.encode("utf-8"))
     out_path.write_text(content, encoding="utf-8")
     if src != "file" and size < MIN_CONTENT_BYTES:
-        print(f"[警告] 内容可能未完整（< {MIN_CONTENT_BYTES} 字节），已保存至: {out_path}")
-    else:
-        print(f"[完成] 已保存至: {out_path} ({size} 字节)")
+        _log(f"[警告] 内容可能未完整（< {MIN_CONTENT_BYTES} 字节）")
+    _log(f"采集完成: 已保存 {out_path.name}，{size} 字节（约 {len(content)} 字）")
     return out_path
 
 
