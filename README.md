@@ -18,14 +18,19 @@ pip install -r requirements.txt
 
 ## 配置
 
-复制 `.env.example` 为 `.env`，填入 Kimi API Key：
+复制 `.env.example` 为 `.env`，填入 API Key。支持多 Provider 切换：
 
-```
-KIMI_API_KEY=你的API_Key
-KIMI_MODEL=kimi-k2-turbo-preview
-```
+| Provider | 环境变量 | 说明 |
+|----------|----------|------|
+| kimi | KIMI_API_KEY | 月之暗面 Kimi（默认） |
+| openai | OPENAI_API_KEY | ChatGPT |
+| grok | GROK_API_KEY | xAI Grok |
+| perplexity | PERPLEXITY_API_KEY | Perplexity |
+| claude | ANTHROPIC_API_KEY | Anthropic Claude（需 `pip install anthropic`） |
+| gemini | GEMINI_API_KEY | Google Gemini（需 `pip install google-generativeai`） |
 
-或在系统环境变量中设置 `KIMI_API_KEY`。
+在 `.env` 中设置 `LLM_PROVIDER=kimi`（或 openai、grok 等）选择默认 Provider。  
+命令行可覆盖：`python main.py all "输入" -p openai`
 
 ---
 
@@ -46,7 +51,34 @@ all：全流程一条龙
 | Step4 | report-v2 | 报告1.0 + 专家意见 + 原始语料 | `output/reports/{name}_report_v2.md`、`.docx` |
 | Step5 | report-final | 报告2.0 + 原始语料 | `output/reports/{name}_report_v3.md`、`.docx` |
 
-### 二、各步骤详解
+### 二、目录语料批量流程（新增）
+
+当有多份语料文件存放在同一目录时，可先进行重整再进入文档流程：
+
+| 阶段 | 命令 | 输入 | 输出 |
+|------|------|------|------|
+| Step0 | merge | 本地目录路径 | `output/raw/{name}.txt`（去重、排序后的合本） |
+| 后续 | - | 同上 | 可接 report-v1 → experts → report-v2 → report-final |
+
+**merge**：读取目录下所有语料，调用云端大模型 API 进行去重、排序，输出合成本地语料。支持格式：
+- 文本：.txt / .md / .json / .html
+- Word：.docx
+- PDF：.pdf
+- 图片：.jpg / .png / .gif / .webp / .bmp（提交云端 Vision API 处理）
+
+**batch**：一步完成 Step0 + 1.0 + 2.0 + 3.0 全流程。
+
+```bash
+# 仅重整语料（输出到 output/raw/xxx.txt）
+python main.py merge ./my_corpus_dir -o 输出名 -r
+
+# 重整 + 全流程 1.0→2.0→3.0
+python main.py batch ./my_corpus_dir -o 输出名 -r -s A
+```
+
+`-r` 表示递归读取子目录。
+
+### 三、各步骤详解
 
 #### Step1 采集（fetch / crawl / import）
 
@@ -93,7 +125,7 @@ all：全流程一条龙
 - **风格**：A=商业模式设计报告；B=可行性研究报告；C=学术综述
 - **输出**：`{name}_report_v3.md`、`{name}_report_v3.docx`
 
-### 三、输出目录结构
+### 四、输出目录结构
 
 ```
 output/
@@ -151,6 +183,8 @@ python main.py report-final output/reports/xxx_report_v2.md -r output/raw/xxx.tx
 
 | 命令 | 说明 |
 |------|------|
+| **merge** | Step0：读取目录语料，经 API 去重排序后合成为 output/raw/xxx.txt |
+| **batch** | 目录语料重整 + 1.0 → 专家 → 2.0 → 3.0 全流程 |
 | **all-v3** | fetch → report-v3（从原始语料直接生成 3.0，不走专家流程） |
 | **all-context** | 多轮 Kimi 会话（保持记忆）→ 1.0 → 专家 → 2.0 |
 | **install-browser** | 安装 Playwright Chromium（爬虫备用） |

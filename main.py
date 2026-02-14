@@ -4,6 +4,7 @@ AI 对话记录整理：支持 ChatGPT、Gemini、Perplexity 的分享链接或�
 抓取/导入 → Kimi 分类与报告 1.0/3.0 → 专家评审 → Word 导出。
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -38,6 +39,66 @@ def cmd_fetch(args):
     """统一入口：URL 或本地文件路径。抓取页面的 URL 由命令行参数传入，不从文件读取。"""
     from src.ingest.sources import run_ingest
     return run_ingest(args.input, args.output)
+
+
+def cmd_merge(args):
+    """Step0: 读取目录下所有语料，经 API 去重排序后合成为本地语料文件。"""
+    from src.step0_corpus_merge import run_corpus_merge
+    dir_path = Path(args.dir)
+    if not dir_path.is_absolute():
+        dir_path = Path.cwd() / dir_path
+    run_corpus_merge(dir_path, args.output, getattr(args, "recursive", False))
+
+
+def _apply_provider(provider: str):
+    """命令行指定 Provider 时覆盖环境变量。"""
+    if provider:
+        os.environ["LLM_PROVIDER"] = provider
+
+
+def cmd_batch(args):
+    """Step0 语料重整 + 全流程：读取目录语料 → 去重排序 → 1.0 → 专家 → 2.0 → 3.0"""
+    import time
+    _apply_provider(getattr(args, "provider", None))
+    from src.step0_corpus_merge import run_corpus_merge
+    dir_path = Path(args.dir)
+    if not dir_path.is_absolute():
+        dir_path = Path.cwd() / dir_path
+    base = args.output or dir_path.name
+    style = getattr(args, "final_style", "A")
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ========== 批量语料流程开始 ==========", flush=True)
+    print(f"[{ts}] 目录: {dir_path}", flush=True)
+    print(f"[{ts}] ======================================\n", flush=True)
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step0 语料重整 ----------\n", flush=True)
+    raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step2 报告 1.0 ----------\n", flush=True)
+    from src.step2_report_v1 import run_meta_and_report_v1
+    r1 = run_meta_and_report_v1(raw_path, base)
+    report_v1_path = Path(r1["report_v1_path"])
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step3 专家评审 ----------\n", flush=True)
+    cmd_experts(argparse.Namespace(report_v1=report_v1_path, output_base=base))
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step4 报告 2.0 ----------\n", flush=True)
+    cmd_report_v2(argparse.Namespace(report_v1=report_v1_path, expert_file=None, output_base=base, raw_file=raw_path))
+
+    report_v2_path = REPORT_DIR / f"{base}_report_v2.md"
+    if not report_v2_path.is_file():
+        report_v2_path = REPORT_DIR / f"{base}_report_v2_new.md"
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ---------- Step5 报告 3.0 最终版 ----------\n", flush=True)
+    cmd_report_final(argparse.Namespace(report_v2=report_v2_path, output_base=base, style=style, raw_file=raw_path))
+
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    print(f"\n[{ts}] ========== 批量语料流程完成 ==========\n", flush=True)
 
 
 def cmd_report_v1(args):
@@ -103,6 +164,7 @@ def cmd_all_v3(args):
 def cmd_all(args):
     """全流程：抓取/导入 → 报告1.0 → 专家 → 报告2.0 → 报告3.0 最终版+Word"""
     import time
+    _apply_provider(getattr(args, "provider", None))
     t_start = time.time()
     ts = time.strftime("%H:%M:%S", time.localtime())
     print(f"\n[{ts}] ========== 全流程开始 ==========", flush=True)
@@ -172,6 +234,23 @@ def main():
     p1c.add_argument("-o", "--output", default=None, help="输出文件名（不含扩展名）")
     p1c.set_defaults(func=cmd_fetch)
 
+    # step0 - 目录语料重整（新增功能，不影响原流程）
+    p0m = sub.add_parser("merge", help="Step0: 读取目录下所有语料，经 API 去重排序后合成为 output/raw/xxx.txt")
+    p0m.add_argument("dir", type=Path, help="语料目录路径")
+    p0m.add_argument("-o", "--output", default=None, help="输出文件名（不含扩展名），默认用目录名")
+    p0m.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
+    p0m.set_defaults(func=cmd_merge)
+
+    p0b2 = sub.add_parser("batch", help="批量流程：目录语料重整 → 1.0 → 专家 → 2.0 → 3.0 最终版")
+    p0b2.add_argument("dir", type=Path, help="语料目录路径")
+    p0b2.add_argument("-o", "--output", default=None, help="输出文件名前缀")
+    p0b2.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
+    p0b2.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"],
+                      help="报告3.0风格: A=商业模式设计报告, B=可行性研究报告, C=学术综述")
+    p0b2.add_argument("-p", "--provider", choices=["kimi", "openai", "grok", "perplexity", "claude", "gemini"],
+                      help="指定 LLM Provider（覆盖 .env 中的 LLM_PROVIDER）")
+    p0b2.set_defaults(func=cmd_batch)
+
     # step2
     p2 = sub.add_parser("report-v1", help="Step2: 生成标题/摘要/关键词与深度报告 1.0")
     p2.add_argument("raw_file", type=Path, help="原始文本，如 output/raw/xxx.txt")
@@ -213,6 +292,8 @@ def main():
     p0.add_argument("-o", "--output", default=None, help="各步骤输出文件名前缀")
     p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"],
                     help="报告3.0风格: A=商业模式设计报告, B=可行性研究报告, C=学术综述")
+    p0.add_argument("-p", "--provider", choices=["kimi", "openai", "grok", "perplexity", "claude", "gemini"],
+                    help="指定 LLM Provider（覆盖 .env 中的 LLM_PROVIDER）")
     p0.set_defaults(func=cmd_all)
 
     # all-v3
