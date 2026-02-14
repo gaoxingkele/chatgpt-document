@@ -1,11 +1,16 @@
 # chatgpt-document
 
-从 AI 对话记录（ChatGPT、Gemini、Perplexity）抓取或导入内容，经 Kimi 大模型分类整理、生成深度报告，支持报告 1.0 → 专家评审 → 报告 2.0 → 报告 3.0 最终版。
+从 AI 对话记录（ChatGPT、Gemini、Perplexity）抓取或导入内容，经大模型分类整理、生成深度报告，支持报告 1.0 → 专家评审 → 报告 2.0 → 报告 3.0 最终版。
+
+## 核心特性
+
+- **多 API 支持**：Kimi、OpenAI、Grok、Perplexity、Claude、Gemini，可切换或指定 Provider
+- **本地文档语料合并**：读取目录下 Word/PDF/图片等，经 API 去重排序后生成报告 3.0
 
 ## 环境要求
 
 - Python 3.8+
-- Kimi（月之暗面）API Key：[Moonshot 开放平台](https://platform.moonshot.cn) 创建
+- 任一 API Key：Kimi / OpenAI / Grok / Perplexity / Anthropic / Google Gemini
 
 ## 安装
 
@@ -16,21 +21,21 @@ pip install -r requirements.txt
 
 首次使用 Pyppeteer 时会自动下载 Chromium，请保持网络畅通。
 
-## 配置
+## 配置：多 API 接口
 
-复制 `.env.example` 为 `.env`，填入 API Key。支持多 Provider 切换：
+复制 `.env.example` 为 `.env`，填入所需 API Key：
 
-| Provider | 环境变量 | 说明 |
-|----------|----------|------|
-| kimi | KIMI_API_KEY | 月之暗面 Kimi（默认） |
-| openai | OPENAI_API_KEY | ChatGPT |
-| grok | GROK_API_KEY | xAI Grok |
-| perplexity | PERPLEXITY_API_KEY | Perplexity |
-| claude | ANTHROPIC_API_KEY | Anthropic Claude（需 `pip install anthropic`） |
-| gemini | GEMINI_API_KEY | Google Gemini（需 `pip install google-generativeai`） |
+| Provider | 环境变量 | 获取地址 |
+|----------|----------|----------|
+| kimi | KIMI_API_KEY | [Moonshot 开放平台](https://platform.moonshot.cn)（默认） |
+| openai | OPENAI_API_KEY | [OpenAI](https://platform.openai.com) |
+| grok | GROK_API_KEY | [xAI](https://x.ai) |
+| perplexity | PERPLEXITY_API_KEY | [Perplexity](https://www.perplexity.ai/settings/api) |
+| claude | ANTHROPIC_API_KEY | [Anthropic](https://console.anthropic.com)（需 `pip install anthropic`） |
+| gemini | GEMINI_API_KEY | [Google AI Studio](https://aistudio.google.com)（需 `pip install google-generativeai`） |
 
-在 `.env` 中设置 `LLM_PROVIDER=kimi`（或 openai、grok 等）选择默认 Provider。  
-命令行可覆盖：`python main.py all "输入" -p openai`
+- 在 `.env` 中设置 `LLM_PROVIDER=gemini`（或 openai、kimi 等）选择默认 Provider
+- 命令行可覆盖：`python main.py batch ./语料目录 -o 输出名 -p gemini`
 
 ---
 
@@ -51,32 +56,33 @@ all：全流程一条龙
 | Step4 | report-v2 | 报告1.0 + 专家意见 + 原始语料 | `output/reports/{name}_report_v2.md`、`.docx` |
 | Step5 | report-final | 报告2.0 + 原始语料 | `output/reports/{name}_report_v3.md`、`.docx` |
 
-### 二、目录语料批量流程（新增）
+### 二、本地文档语料合并（merge / batch）
 
-当有多份语料文件存放在同一目录时，可先进行重整再进入文档流程：
+当有多份语料文件（Word、PDF、图片等）存放在同一目录时，可先进行合并重整，再进入报告流程。
 
 | 阶段 | 命令 | 输入 | 输出 |
 |------|------|------|------|
 | Step0 | merge | 本地目录路径 | `output/raw/{name}.txt`（去重、排序后的合本） |
-| 后续 | - | 同上 | 可接 report-v1 → experts → report-v2 → report-final |
+| 全流程 | batch | 本地目录路径 | Step0 → 1.0 → 专家 → 2.0 → 3.0 |
 
-**merge**：读取目录下所有语料，调用云端大模型 API 进行去重、排序，输出合成本地语料。支持格式：
+**merge**：读取目录下所有语料，调用云端大模型 API 进行去重、排序，输出合成本地语料。  
+**支持格式**：
 - 文本：.txt / .md / .json / .html
 - Word：.docx
 - PDF：.pdf
 - 图片：.jpg / .png / .gif / .webp / .bmp（提交云端 Vision API 处理）
 
-**batch**：一步完成 Step0 + 1.0 + 2.0 + 3.0 全流程。
+**batch**：一步完成「目录语料合并 + 报告 1.0 + 专家评审 + 报告 2.0 + 报告 3.0 最终版」。
 
 ```bash
 # 仅重整语料（输出到 output/raw/xxx.txt）
 python main.py merge ./my_corpus_dir -o 输出名 -r
 
-# 重整 + 全流程 1.0→2.0→3.0
-python main.py batch ./my_corpus_dir -o 输出名 -r -s A
+# 重整 + 全流程 1.0→2.0→3.0，并指定 API Provider
+python main.py batch ./my_corpus_dir -o 输出名 -r -s A -p gemini
 ```
 
-`-r` 表示递归读取子目录。
+`-r` 递归读取子目录；`-p gemini` 指定使用 Gemini API（也可为 openai、kimi 等）。
 
 ### 三、各步骤详解
 
@@ -142,8 +148,9 @@ output/
 
 ```bash
 # 从分享链接或本地文件
-python main.py all "分享链接或本地文件路径" -o 输出名 -s A
+python main.py all "分享链接或本地文件路径" -o 输出名 -s A -p gemini
 
+# -p 指定 API：gemini | openai | kimi | grok | perplexity | claude
 # -s 指定报告3.0风格：A=商业模式设计报告, B=可行性研究报告, C=学术综述
 ```
 
@@ -183,8 +190,8 @@ python main.py report-final output/reports/xxx_report_v2.md -r output/raw/xxx.tx
 
 | 命令 | 说明 |
 |------|------|
-| **merge** | Step0：读取目录语料，经 API 去重排序后合成为 output/raw/xxx.txt |
-| **batch** | 目录语料重整 + 1.0 → 专家 → 2.0 → 3.0 全流程 |
+| **merge** | 本地文档语料合并：读取目录下 Word/PDF/图片等，经 API 去重排序后合成为 output/raw/xxx.txt |
+| **batch** | 目录语料重整 + 全流程（1.0 → 专家 → 2.0 → 3.0），支持 `-p` 指定 API |
 | **all-v3** | fetch → report-v3（从原始语料直接生成 3.0，不走专家流程） |
 | **all-context** | 多轮 Kimi 会话（保持记忆）→ 1.0 → 专家 → 2.0 |
 | **install-browser** | 安装 Playwright Chromium（爬虫备用） |
