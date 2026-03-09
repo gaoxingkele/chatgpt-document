@@ -5,7 +5,7 @@
 import re
 from pathlib import Path
 
-from config import RAW_DIR, PROJECT_ROOT, MIN_CONTENT_BYTES
+from config import RAW_DIR, PROJECT_ROOT, MIN_CONTENT_BYTES, TEXT_EXTENSIONS
 
 
 from src.utils.log import log as _log
@@ -45,7 +45,7 @@ def detect_source(input_str: str) -> str:
                 return platform
         return "generic"
     # 文件路径：显式路径或带扩展名（如 Perplexity 下载的 .md）
-    if s.endswith((".txt", ".json", ".md", ".html")):
+    if s.endswith(tuple(TEXT_EXTENSIONS)):
         return "file"
     p = Path(s)
     if p.is_file():

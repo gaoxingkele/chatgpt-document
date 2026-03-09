@@ -124,5 +124,11 @@ COMPRESS_SKILL_TEXT_LIMIT = 12_000     # 压缩时 Skill.md 截取
 COMPRESS_SUMMARY_TEXT_LIMIT = 8_000    # 压缩时 summary.md 截取
 COMPRESS_DOC_LIMIT = 60_000            # 压缩时文档截取
 
+# ============ 支持的文件扩展名 ============
+TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}
+DOCUMENT_EXTENSIONS = {".docx", ".pdf"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+CORPUS_EXTENSIONS = TEXT_EXTENSIONS | DOCUMENT_EXTENSIONS | IMAGE_EXTENSIONS
+
 for d in (OUTPUT_DIR, RAW_DIR, REPORT_DIR, EXPERT_DIR, SKILL_DIR, FILES_DIR):
     d.mkdir(parents=True, exist_ok=True)

@@ -10,17 +10,10 @@ from typing import List, Tuple
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import RAW_DIR
+from config import RAW_DIR, CORPUS_EXTENSIONS
 from src.llm_client import chat
 from src.ingest.file_importer import import_from_file
 from src.corpus_extractors import extract_from_docx, extract_from_pdf, extract_from_image
-
-# 支持的语料文件扩展名（含 Word、PDF、图片）
-CORPUS_EXTENSIONS = {
-    ".txt", ".md", ".json", ".html",
-    ".docx", ".pdf",
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp",
-}
 # 单次 API 传入最大字符数（超长则分批处理）
 MAX_CHARS_PER_CALL = 100000
 
