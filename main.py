@@ -12,7 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import RAW_DIR, REPORT_DIR, FILES_DIR
+from config import RAW_DIR, REPORT_DIR
 from src.report_type_profiles import list_supported_report_types, load_report_type_profile
 
 REPORT_TYPE_CHOICES = list_supported_report_types()
@@ -222,7 +222,7 @@ def cmd_report_final(args):
 
 def cmd_all_v3(args):
     """全流程：抓取/导入 → 报告 3.0"""
-    from src.ingest.sources import run_ingest, detect_source
+    from src.ingest.sources import run_ingest
     raw_path = run_ingest(args.input, args.output)
     base = args.output or (raw_path.stem if raw_path else "share")
     from src.step2_report_v3 import run_report_v3

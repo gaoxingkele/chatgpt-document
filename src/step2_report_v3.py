@@ -9,7 +9,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import RAW_DIR, REPORT_DIR, RAW_LOAD_LIMIT, STRUCTURE_RAW_LIMIT
+from config import RAW_DIR, REPORT_DIR, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat
 from src.utils.docx_utils import md_to_docx
 from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json

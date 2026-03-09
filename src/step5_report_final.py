@@ -10,7 +10,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import REPORT_DIR, RAW_DIR, RAW_LOAD_LIMIT_FINAL, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
+from config import REPORT_DIR, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
 from src.utils.docx_utils import md_to_docx

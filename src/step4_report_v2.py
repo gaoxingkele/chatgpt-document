@@ -10,7 +10,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import (
     REPORT_DIR, EXPERT_DIR, RAW_DIR,
-    RAW_LOAD_LIMIT_V2, HALLUCINATION_TEXT_LIMIT,
+    HALLUCINATION_TEXT_LIMIT,
     REVISE_RAW_CHUNK_LIMIT, REVISE_EXPERT_LIMIT, REVISE_CHAPTER_BODY_LIMIT,
 )
 from src.llm_client import chat
@@ -18,7 +18,6 @@ from src.utils.log import log as _log
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
 from src.utils.docx_utils import md_to_docx
 from src.utils.parallel import parallel_map
-import re
 
 
 def _load_expert_combined(base: str) -> str:

@@ -4,7 +4,6 @@
 通过 LLM_PROVIDER 环境变量或 provider 参数切换。
 """
 import os
-from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 

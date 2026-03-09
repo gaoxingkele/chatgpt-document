@@ -13,7 +13,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import REPORT_DIR, EXPERT_DIR, EXPERT_PREVIEW_LIMIT
+from config import EXPERT_DIR, EXPERT_PREVIEW_LIMIT
 from src.llm_client import chat
 from src.llm_client import perplexity_chat_with_citations
 from src.report_type_profiles import load_report_type_profile

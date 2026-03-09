@@ -3,14 +3,13 @@
 Step7（可选）：根据原始语料与最新版报告，采用 Skill.md 与 summary.md 进行风格化处理，
 输出学术风格分析报告。支持并行章节处理，provider 由环境变量或参数指定。
 """
-import re
 import time
 from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import (
-    REPORT_DIR, RAW_DIR, SKILL_DIR,
+    REPORT_DIR, SKILL_DIR,
     POLICY_CHAPTER_BODY_LIMIT, POLICY_RAW_PREVIEW_LIMIT,
     SKILL_TEXT_LIMIT, SUMMARY_TEXT_LIMIT, POLICY_RAW_TOTAL_LIMIT,
 )
