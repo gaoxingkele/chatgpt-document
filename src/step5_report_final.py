@@ -7,6 +7,7 @@ Step5: 在报告 2.0 基础上生成 3.0 最终版。
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -160,9 +161,10 @@ def run_report_final(
         if first_line.startswith("# "):
             header_v3 = header_v3.replace(first_line, first_line + f"（{style_info['name']}）", 1)
 
-    prose_parts: list[str] = []
-    for idx, (ch_title, ch_body) in enumerate(chapters):
-        _log(f"--- 改写第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}...")
+    results: dict[int, str] = {}
+
+    def _convert_one(idx: int, ch_title: str, ch_body: str) -> tuple[int, str]:
+        _log(f"[并行] 改写第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}...")
         revised = _api_convert_chapter_to_prose(
             ch_title,
             ch_body,
@@ -171,8 +173,19 @@ def run_report_final(
             idx + 1,
             num_chapters,
         )
-        _log(f"    完成，输出约 {len(revised)} 字")
-        prose_parts.append(revised)
+        _log(f"[并行] 第 {idx + 1} 章完成，输出约 {len(revised)} 字")
+        return idx, revised
+
+    with ThreadPoolExecutor(max_workers=min(num_chapters, 4)) as executor:
+        futures = {
+            executor.submit(_convert_one, idx, ch_title, ch_body): idx
+            for idx, (ch_title, ch_body) in enumerate(chapters)
+        }
+        for future in as_completed(futures):
+            idx, revised = future.result()
+            results[idx] = revised
+
+    prose_parts = [results[i] for i in range(num_chapters)]
 
     report_v3_body = "\n\n".join(prose_parts)
     report_v3_text = f"{header_v3}\n\n{report_v3_body}".strip()
