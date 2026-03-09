@@ -5,7 +5,6 @@ Step7（可选）：根据原始语料与最新版报告，采用 Skill.md 与 s
 """
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
@@ -19,6 +18,7 @@ from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
 from src.utils.docx_utils import md_to_docx
+from src.utils.parallel import parallel_map
 
 
 from src.utils.log import log as _log
@@ -102,22 +102,13 @@ def _process_by_chapters(
 {summary_text[:SUMMARY_TEXT_LIMIT]}
 """
     total = len(chapters)
-    results: dict[int, str] = {}
 
-    with ThreadPoolExecutor(max_workers=min(total, 4)) as executor:
-        futures = {}
-        for idx, (ch_title, ch_body) in enumerate(chapters):
-            future = executor.submit(
-                _process_single_chapter, idx, total, ch_title, ch_body, style_guide, raw_preview
-            )
-            futures[future] = idx
+    def _do_chapter(idx, chapter):
+        ch_title, ch_body = chapter
+        _, _, revised = _process_single_chapter(idx, total, ch_title, ch_body, style_guide, raw_preview)
+        return revised
 
-        for future in as_completed(futures):
-            idx, ch_title, revised = future.result()
-            results[idx] = revised
-
-    # 按原始章节顺序拼接
-    revised_parts = [results[i] for i in range(total) if i in results]
+    revised_parts = parallel_map(_do_chapter, chapters)
     return "\n\n".join(revised_parts)
 
 

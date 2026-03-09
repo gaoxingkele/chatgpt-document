@@ -6,7 +6,6 @@ Step5: 在报告 2.0 基础上生成 3.0 最终版。
 """
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
@@ -16,6 +15,7 @@ from src.llm_client import chat
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
 from src.utils.docx_utils import md_to_docx
 from src.utils.file_utils import load_raw_content as _load_raw_content
+from src.utils.parallel import parallel_map
 
 STYLE_PROMPTS = {
     "A": {
@@ -150,9 +150,8 @@ def run_report_final(
         if first_line.startswith("# "):
             header_v3 = header_v3.replace(first_line, first_line + f"（{style_info['name']}）", 1)
 
-    results: dict[int, str] = {}
-
-    def _convert_one(idx: int, ch_title: str, ch_body: str) -> tuple[int, str]:
+    def _convert_one(idx, chapter):
+        ch_title, ch_body = chapter
         _log(f"[并行] 改写第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}...")
         revised = _api_convert_chapter_to_prose(
             ch_title,
@@ -163,18 +162,9 @@ def run_report_final(
             num_chapters,
         )
         _log(f"[并行] 第 {idx + 1} 章完成，输出约 {len(revised)} 字")
-        return idx, revised
+        return revised
 
-    with ThreadPoolExecutor(max_workers=min(num_chapters, 4)) as executor:
-        futures = {
-            executor.submit(_convert_one, idx, ch_title, ch_body): idx
-            for idx, (ch_title, ch_body) in enumerate(chapters)
-        }
-        for future in as_completed(futures):
-            idx, revised = future.result()
-            results[idx] = revised
-
-    prose_parts = [results[i] for i in range(num_chapters)]
+    prose_parts = parallel_map(_convert_one, chapters)
 
     report_v3_body = "\n\n".join(prose_parts)
     report_v3_text = f"{header_v3}\n\n{report_v3_body}".strip()
