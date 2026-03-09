@@ -16,7 +16,7 @@ from config import (
 from src.llm_client import chat
 from src.utils.log import log as _log
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
-from src.utils.docx_utils import md_to_docx
+from src.utils.docx_utils import save_docx_safe
 from src.utils.parallel import parallel_map
 
 
@@ -172,14 +172,7 @@ def run_report_v2_and_docx(
 
     # 转为 Word：标题层级字号与粗体，正文段落与列表
     _log("导出 Word：报告 2.0 → .docx")
-    docx_path = REPORT_DIR / f"{base}_report_v2.docx"
-    try:
-        md_to_docx(report_v2_text, docx_path)
-    except PermissionError:
-        alt_path = REPORT_DIR / f"{base}_report_v2_new.docx"
-        md_to_docx(report_v2_text, alt_path)
-        docx_path = alt_path
-        _log(f"[提示] 原文件可能被占用，已保存为: {docx_path.name}")
+    docx_path = save_docx_safe(report_v2_text, REPORT_DIR / f"{base}_report_v2.docx")
     _log(f"Step4 完成：报告 2.0 (Word) 已保存 {docx_path.name}")
 
     return {

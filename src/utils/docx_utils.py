@@ -129,3 +129,17 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
         i += 1
 
     doc.save(str(docx_path))
+
+
+def save_docx_safe(md_text: str, docx_path: Path) -> Path:
+    """md_to_docx 的安全包装：PermissionError 时自动追加 _new 后缀并记录日志。返回实际保存路径。"""
+    from src.utils.log import log as _log
+    try:
+        md_to_docx(md_text, docx_path)
+        return docx_path
+    except PermissionError:
+        stem = docx_path.stem
+        alt_path = docx_path.with_name(f"{stem}_new.docx")
+        md_to_docx(md_text, alt_path)
+        _log(f"[提示] 原文件可能被占用，已保存为: {alt_path.name}")
+        return alt_path

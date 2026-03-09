@@ -457,15 +457,9 @@ def run_meta_and_report_v1(raw_path: Path, output_basename: str = None) -> dict:
     report_v1_path.write_text(report_v1_text, encoding="utf-8")
     _log(f"Step2 报告 1.0 定稿：约 {len(report_v1_text)} 字，已保存 {report_v1_path.name}")
 
-    from src.utils.docx_utils import md_to_docx
+    from src.utils.docx_utils import save_docx_safe
     _log("Step2 导出 Word：报告 1.0 → .docx（格式同 2.0）")
-    docx_path = REPORT_DIR / f"{base}_report_v1.docx"
-    try:
-        md_to_docx(report_v1_text, docx_path)
-    except PermissionError:
-        docx_path = REPORT_DIR / f"{base}_report_v1_new.docx"
-        md_to_docx(report_v1_text, docx_path)
-        _log(f"[提示] 原文件可能被占用，已保存为: {docx_path.name}")
+    docx_path = save_docx_safe(report_v1_text, REPORT_DIR / f"{base}_report_v1.docx")
     _log(f"Step2 报告 1.0 (Word) 已保存: {docx_path}")
 
     result = {

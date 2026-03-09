@@ -11,6 +11,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 from config import REPORT_DIR, EXPERT_DIR
 from src.kimi_client import chat, chat_append
 from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json
+from src.utils.log import log as _log
 
 
 SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家。用户将提供一份「原始对话语料」，你必须**在整次对话中全程保持对该语料的记忆**，并基于该记忆完成后续所有任务。
@@ -61,7 +62,7 @@ def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
 
     meta_path = REPORT_DIR / f"{base}_meta.json"
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[流水线] 元数据已保存: {meta_path}")
+    _log(f"[流水线] 元数据已保存: {meta_path}")
 
     # Round 2: 报告 1.0
     report_v1_prompt = """请基于你已记忆的原始语料，撰写「深度调查报告 1.0」。
@@ -79,7 +80,7 @@ def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
     )
     report_v1_path = REPORT_DIR / f"{base}_report_v1.md"
     report_v1_path.write_text(report_v1_text, encoding="utf-8")
-    print(f"[流水线] 报告 1.0 已保存: {report_v1_path}")
+    _log(f"[流水线] 报告 1.0 已保存: {report_v1_path}")
 
     # Round 3–5: 三位专家
     expert_systems = [
@@ -97,14 +98,14 @@ def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
         out_path = EXPERT_DIR / f"{base}_{name}.md"
         out_path.write_text(f"# {name} 评审意见\n\n{opinion}", encoding="utf-8")
         expert_contents.append((name, opinion))
-        print(f"[流水线] {name} 已保存: {out_path}")
+        _log(f"[流水线] {name} 已保存: {out_path}")
 
     combined = "# 深度调查报告 1.0 — 专家评审意见汇总\n\n"
     for name, op in expert_contents:
         combined += f"## {name}\n\n{op}\n\n---\n\n"
     combined_path = EXPERT_DIR / f"{base}_专家意见汇总.md"
     combined_path.write_text(combined, encoding="utf-8")
-    print(f"[流水线] 专家意见汇总已保存: {combined_path}")
+    _log(f"[流水线] 专家意见汇总已保存: {combined_path}")
 
     # Round 6: 报告 2.0（重点：保持篇幅、重写而非压缩）
     report_v2_prompt = f"""请根据你已记忆的**原始语料**、已生成的《报告 1.0》以及《专家评审意见汇总》，撰写「深度调查报告 2.0」。
@@ -126,19 +127,12 @@ def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
 
     report_v2_path = REPORT_DIR / f"{base}_report_v2.md"
     report_v2_path.write_text(report_v2_text, encoding="utf-8")
-    print(f"[流水线] 报告 2.0 (Markdown) 已保存: {report_v2_path}")
+    _log(f"[流水线] 报告 2.0 (Markdown) 已保存: {report_v2_path}")
 
     # 转为 Word
-    from src.utils.docx_utils import md_to_docx
-    docx_path = REPORT_DIR / f"{base}_report_v2.docx"
-    try:
-        md_to_docx(report_v2_text, docx_path)
-    except PermissionError:
-        alt_path = REPORT_DIR / f"{base}_report_v2_new.docx"
-        md_to_docx(report_v2_text, alt_path)
-        docx_path = alt_path
-        print(f"[提示] 原文件可能被占用，已保存为: {docx_path}")
-    print(f"[流水线] 报告 2.0 (Word) 已保存: {docx_path}")
+    from src.utils.docx_utils import save_docx_safe
+    docx_path = save_docx_safe(report_v2_text, REPORT_DIR / f"{base}_report_v2.docx")
+    _log(f"[流水线] 报告 2.0 (Word) 已保存: {docx_path}")
 
     return {
         "meta": meta,

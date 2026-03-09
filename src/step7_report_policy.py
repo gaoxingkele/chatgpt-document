@@ -16,7 +16,7 @@ from config import (
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
-from src.utils.docx_utils import md_to_docx
+from src.utils.docx_utils import save_docx_safe
 from src.utils.parallel import parallel_map
 
 
@@ -178,13 +178,7 @@ def run_report_policy(
     md_path.write_text(report_out, encoding="utf-8")
     _log(f"已保存: {md_path.name}")
 
-    docx_path = REPORT_DIR / f"{out_name}.docx"
-    try:
-        md_to_docx(report_out, docx_path)
-    except PermissionError:
-        docx_path = REPORT_DIR / f"{out_name}_new.docx"
-        md_to_docx(report_out, docx_path)
-        _log(f"[提示] 原文件可能被占用，已保存为: {docx_path.name}")
+    docx_path = save_docx_safe(report_out, REPORT_DIR / f"{out_name}.docx")
     _log(f"Step7 完成：学术风格分析报告 (Word) 已保存 {docx_path.name}")
 
     return {

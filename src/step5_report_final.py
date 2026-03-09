@@ -13,7 +13,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 from config import REPORT_DIR, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
-from src.utils.docx_utils import md_to_docx
+from src.utils.docx_utils import save_docx_safe
 from src.utils.file_utils import load_raw_content as _load_raw_content
 from src.utils.parallel import parallel_map
 
@@ -176,14 +176,7 @@ def run_report_final(
     _log(f"报告 3.0 (Markdown) 已保存: {report_v3_path.name}")
 
     _log("导出 Word：报告 3.0 → .docx")
-    docx_path = REPORT_DIR / f"{base}_report_v3.docx"
-    try:
-        md_to_docx(report_v3_text, docx_path)
-    except PermissionError:
-        alt_path = REPORT_DIR / f"{base}_report_v3_new.docx"
-        md_to_docx(report_v3_text, alt_path)
-        docx_path = alt_path
-        _log(f"[提示] 原文件可能被占用，已保存为: {docx_path.name}")
+    docx_path = save_docx_safe(report_v3_text, REPORT_DIR / f"{base}_report_v3.docx")
     _log(f"Step5 完成：报告 3.0 (Word) 已保存 {docx_path.name}")
 
     return {

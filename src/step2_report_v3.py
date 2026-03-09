@@ -11,8 +11,9 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import RAW_DIR, REPORT_DIR, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat
-from src.utils.docx_utils import md_to_docx
+from src.utils.docx_utils import save_docx_safe
 from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json
+from src.utils.log import log as _log
 
 
 # 章节序号对应中文大写
@@ -43,7 +44,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
     base = output_basename or raw_path.stem
 
     # --- 3.1 规划文档结构
-    print("[报告 3.0] Step 1/3: 规划文档结构...")
+    _log("[报告 3.0] Step 1/3: 规划文档结构...")
     structure_prompt = f"""请根据以下「ChatGPT 对话原始语料」规划一份深度报告的文档结构。
 
 要求：
@@ -146,7 +147,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
         chapter_contents.append((num, title, chapter_text.strip()))
 
     # --- 3.3 合并输出
-    print("[报告 3.0] Step 3/3: 合并报告并导出 Word...")
+    _log("[报告 3.0] Step 3/3: 合并报告并导出 Word...")
     report_title = meta.get("title", "深度调查报告 3.0")
     report_body = f"# {report_title}\n\n"
     if meta.get("summary"):
@@ -168,15 +169,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Word 导出
-    docx_path = REPORT_DIR / f"{base}_report_v3.docx"
-    try:
-        md_to_docx(report_body, docx_path)
-        print(f"[报告 3.0] Word 已保存: {docx_path}")
-    except Exception as e:
-        alt_path = REPORT_DIR / f"{base}_report_v3_final.docx"
-        md_to_docx(report_body, alt_path)
-        print(f"[报告 3.0] Word 已保存（备用）: {alt_path}")
-        docx_path = alt_path
+    docx_path = save_docx_safe(report_body, REPORT_DIR / f"{base}_report_v3.docx")
 
     result = {
         "meta": meta,
@@ -184,7 +177,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
         "docx_path": str(docx_path),
         "report_v3_text": report_body,
     }
-    print(f"[报告 3.0] Markdown 已保存: {report_v3_path}")
+    _log(f"[报告 3.0] Markdown 已保存: {report_v3_path}")
     return result
 
 

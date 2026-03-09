@@ -14,7 +14,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT
 from src.llm_client import perplexity_chat_with_citations
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
-from src.utils.docx_utils import md_to_docx
+from src.utils.docx_utils import save_docx_safe
 from src.utils.log import log as _log
 
 
@@ -147,13 +147,7 @@ def run_report_v4(report_v3_path: Path, output_basename: str = None) -> dict:
     _log(f"报告 4.0 (Markdown) 已保存: {report_v4_path.name}")
 
     # 导出 Word
-    docx_path = REPORT_DIR / f"{base}_report_v4.docx"
-    try:
-        md_to_docx(report_v4_text, docx_path)
-    except PermissionError:
-        docx_path = REPORT_DIR / f"{base}_report_v4_new.docx"
-        md_to_docx(report_v4_text, docx_path)
-        _log(f"[提示] 原文件可能被占用，已保存为: {docx_path.name}")
+    docx_path = save_docx_safe(report_v4_text, REPORT_DIR / f"{base}_report_v4.docx")
     _log(f"Step6 完成：报告 4.0 (Word) 已保存 {docx_path.name}")
 
     return {
