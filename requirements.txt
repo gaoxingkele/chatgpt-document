@@ -17,5 +17,8 @@ python-dotenv>=1.0.0
 # HTTP 与工具
 httpx>=0.27.0
 
+# API 重试
+tenacity>=8.2.0
+
 # 可选：Claude 需 anthropic，Gemini 需 google-generativeai
 # pip install anthropic google-generativeai

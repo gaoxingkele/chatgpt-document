@@ -11,8 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import time as _time
+
 import httpx
 from openai import OpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 from config import (
     LLM_PROVIDER,
@@ -86,6 +89,55 @@ PROVIDER_CONFIG = {
 _OPENAI_COMPATIBLE = ("kimi", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity")
 
 
+def _is_retryable(exc: BaseException) -> bool:
+    """判断异常是否值得重试：5xx、429、超时、连接错误。"""
+    # httpx 超时与连接错误
+    if isinstance(exc, (httpx.TimeoutException, httpx.ConnectError, ConnectionError, TimeoutError)):
+        return True
+    # OpenAI SDK 包装的错误
+    try:
+        from openai import APIStatusError, APITimeoutError, APIConnectionError
+        if isinstance(exc, (APITimeoutError, APIConnectionError)):
+            return True
+        if isinstance(exc, APIStatusError) and exc.status_code in (429, 500, 502, 503, 504):
+            return True
+    except ImportError:
+        pass
+    # Anthropic SDK 错误
+    try:
+        from anthropic import APIStatusError as AnthropicStatusError, APITimeoutError as AnthropicTimeout, APIConnectionError as AnthropicConnError
+        if isinstance(exc, (AnthropicTimeout, AnthropicConnError)):
+            return True
+        if isinstance(exc, AnthropicStatusError) and exc.status_code in (429, 500, 502, 503, 504):
+            return True
+    except ImportError:
+        pass
+    # RuntimeError from Perplexity with 5xx / 429
+    if isinstance(exc, RuntimeError):
+        msg = str(exc)
+        if any(f"API {code}" in msg for code in ("429", "500", "502", "503", "504")):
+            return True
+    return False
+
+
+def _log_retry(retry_state):
+    """重试时打印日志。"""
+    exc = retry_state.outcome.exception()
+    attempt = retry_state.attempt_number
+    ts = _time.strftime("%H:%M:%S", _time.localtime())
+    print(f"[{ts}] [LLM重试] 第 {attempt} 次失败: {type(exc).__name__}: {str(exc)[:200]}，即将重试...", flush=True)
+
+
+_llm_retry = retry(
+    retry=retry_if_exception(_is_retryable),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=16),
+    before_sleep=_log_retry,
+    reraise=True,
+)
+
+
+@_llm_retry
 def _openai_compatible_chat(provider: str, messages: list, model: str = None, max_tokens: int = 8192, temperature: float = 0.6) -> str:
     """OpenAI 兼容 API。"""
     cfg = PROVIDER_CONFIG.get(provider, PROVIDER_CONFIG["kimi"])
@@ -108,6 +160,7 @@ def _openai_compatible_chat(provider: str, messages: list, model: str = None, ma
     return (resp.choices[0].message.content or "").strip()
 
 
+@_llm_retry
 def _claude_chat(messages: list, model: str = None, max_tokens: int = 8192, temperature: float = 0.6) -> str:
     """Anthropic Claude API。"""
     if not ANTHROPIC_API_KEY:
@@ -141,6 +194,7 @@ def _claude_chat(messages: list, model: str = None, max_tokens: int = 8192, temp
     return (resp.content[0].text if resp.content else "").strip()
 
 
+@_llm_retry
 def _gemini_chat(messages: list, model: str = None, max_tokens: int = 8192, temperature: float = 0.6) -> str:
     """Google Gemini API。"""
     if not GEMINI_API_KEY:
@@ -201,6 +255,7 @@ def chat(
     return _openai_compatible_chat("kimi", messages, model, max_tokens, temperature)
 
 
+@_llm_retry
 def perplexity_chat_with_citations(
     messages: list,
     model: str = None,
