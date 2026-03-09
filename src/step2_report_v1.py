@@ -28,14 +28,7 @@ from src.utils.log import log as _log
 from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json as _clean_json
 
 
-SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家，擅长分析语料、构建文档结构、组织内容。
-
-核心原则：
-1. **忠于原文**：所有内容须来自原始语料，不得编造。
-2. **结构清晰**：大纲层级分明，章节名称由语料内容推理得出。
-3. **逻辑连贯**：装配时保持原始论述逻辑，承上启下自然。
-
-输出格式：严格按用户要求的 JSON 或 Markdown。"""
+from src.prompts import REPORT_WRITER_PROMPT as SYSTEM_PROMPT
 
 # 并行工作线程数（章节装配 / 专家评审）
 MAX_WORKERS = 4

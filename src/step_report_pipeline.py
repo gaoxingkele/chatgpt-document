@@ -14,12 +14,7 @@ from src.utils.file_utils import load_raw_content as _load_raw_content, clean_js
 from src.utils.log import log as _log
 
 
-SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家。用户将提供一份「原始对话语料」，你必须**在整次对话中全程保持对该语料的记忆**，并基于该记忆完成后续所有任务。
-
-核心原则：
-1. **保留论述逻辑**：完整还原原始对话中的论证结构、递进关系、因果关系。
-2. **忠于原文**：所有论点、案例、表格须来自原始语料，不得编造。
-3. **重写而非压缩**：用专业语言重写、去重，但不过度精简，保持论证完整性与丰富度。"""
+from src.prompts import PIPELINE_WRITER_PROMPT as SYSTEM_PROMPT
 
 
 def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
