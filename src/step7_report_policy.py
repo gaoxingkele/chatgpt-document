@@ -13,7 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR, RAW_DIR, SKILL_DIR
+from config import (
+    REPORT_DIR, RAW_DIR, SKILL_DIR,
+    POLICY_CHAPTER_BODY_LIMIT, POLICY_RAW_PREVIEW_LIMIT,
+    SKILL_TEXT_LIMIT, SUMMARY_TEXT_LIMIT, POLICY_RAW_TOTAL_LIMIT,
+)
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
@@ -52,8 +56,7 @@ def _process_single_chapter(
     """处理单个章节的风格化改写，返回 (idx, ch_title, revised_text)。"""
     _log(f"[并行] 风格化第 {idx + 1}/{total} 章: {ch_title[:40]}...")
     t0 = time.time()
-    # 章节正文截取上限 50000 字，保留更多内容
-    body_limit = 50000
+    body_limit = POLICY_CHAPTER_BODY_LIMIT
     prompt = f"""你是一位学术分析报告写作专家。请将以下章节按照上方【写作规范】改写为学术风格分析报告。
 
 要求：
@@ -64,7 +67,7 @@ def _process_single_chapter(
 5. **完整保留原文中的事实、数据、案例、论证链，不要压缩或省略**。
 
 【原始语料摘要】（供参考）
-{raw_preview[:8000]}
+{raw_preview[:POLICY_RAW_PREVIEW_LIMIT]}
 
 【本章标题】{ch_title}
 
@@ -98,10 +101,10 @@ def _process_by_chapters(
     """
     style_guide = f"""
 【写作规范 - Skill.md】
-{skill_text[:15000]}
+{skill_text[:SKILL_TEXT_LIMIT]}
 
 【写作规范 - summary.md 要点】
-{summary_text[:12000]}
+{summary_text[:SUMMARY_TEXT_LIMIT]}
 """
     total = len(chapters)
     results: dict[int, str] = {}
@@ -177,7 +180,7 @@ def run_report_policy(
         _log("[警告] 未能解析章节，将整篇处理")
         chapters = [("正文", report_text)]
 
-    raw_preview = raw_text[:50000] + ("\n\n[已截断]" if len(raw_text) > 50000 else "")
+    raw_preview = raw_text[:POLICY_RAW_TOTAL_LIMIT] + ("\n\n[已截断]" if len(raw_text) > POLICY_RAW_TOTAL_LIMIT else "")
 
     t0 = time.time()
     body = _process_by_chapters(

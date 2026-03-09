@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR
+from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT
 from src.llm_client import perplexity_chat_with_citations
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
 
@@ -129,7 +129,7 @@ def run_report_v4(report_v3_path: Path, output_basename: str = None) -> dict:
         _log(f"--- 处理第 {idx + 1}/{num_chapters} 章: {ch_title[:50]}...")
 
         # 单章不宜过长，截断以保证在上下文限制内
-        body_chunk = ch_body[:12000] + ("\n\n[已截断]" if len(ch_body) > 12000 else "")
+        body_chunk = ch_body[:CITATION_CHAPTER_BODY_LIMIT] + ("\n\n[已截断]" if len(ch_body) > CITATION_CHAPTER_BODY_LIMIT else "")
 
         revised, citations = _process_chapter_with_perplexity(ch_title, body_chunk)
 

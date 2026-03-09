@@ -21,7 +21,7 @@ def _log(msg: str):
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR, EXPERT_DIR
+from config import REPORT_DIR, EXPERT_DIR, EXPERT_PREVIEW_LIMIT
 from src.llm_client import chat
 from src.llm_client import perplexity_chat_with_citations
 from src.report_type_profiles import load_report_type_profile
@@ -178,7 +178,7 @@ def run_experts(
     base = output_basename or report_v1_path.stem.replace("_report_v1", "")
 
     prompts, user_template, profile = _build_profile_prompts(report_type)
-    content_preview = report_text[:60000] if len(report_text) > 60000 else report_text
+    content_preview = report_text[:EXPERT_PREVIEW_LIMIT] if len(report_text) > EXPERT_PREVIEW_LIMIT else report_text
     user_msg = user_template.format(content_preview)
 
     _log("=" * 60)

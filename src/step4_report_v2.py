@@ -17,7 +17,11 @@ def _log(msg: str):
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR, EXPERT_DIR, RAW_DIR
+from config import (
+    REPORT_DIR, EXPERT_DIR, RAW_DIR,
+    RAW_LOAD_LIMIT_V2, HALLUCINATION_TEXT_LIMIT,
+    REVISE_RAW_CHUNK_LIMIT, REVISE_EXPERT_LIMIT, REVISE_CHAPTER_BODY_LIMIT,
+)
 from src.llm_client import chat
 from docx import Document
 from docx.shared import Pt
@@ -40,7 +44,7 @@ def _load_hallucination_list(base: str) -> str:
     return ""
 
 
-def _load_raw_content(raw_path: Path, max_chars: int = 120000) -> str:
+def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT_V2) -> str:
     """加载原始语料，用于补充论述逻辑与篇幅约束。"""
     if not raw_path or not Path(raw_path).is_file():
         return ""
@@ -85,14 +89,14 @@ def _api_revise_chapter(
     if hallucination_text:
         hall_section = f"""
 【幻觉清单】必须删除以下内容，不得出现在本章：
-{hallucination_text[:8000]}
+{hallucination_text[:HALLUCINATION_TEXT_LIMIT]}
 """
     raw_section = ""
     if raw_chunk:
         raw_section = f"""
 【原始语料】（供参考，优先保留论证、案例、数据）
 ---
-{raw_chunk[:35000]}
+{raw_chunk[:REVISE_RAW_CHUNK_LIMIT]}
 ---
 """
     prompt = f"""请对《深度调查报告 1.0》的**第 {chapter_idx}/{total_chapters} 章**进行整改，输出该章的完整正文。
@@ -106,7 +110,7 @@ def _api_revise_chapter(
 
 【专家评审意见】（采纳可执行的改进）
 ---
-{expert_text[:25000]}
+{expert_text[:REVISE_EXPERT_LIMIT]}
 ---
 {hall_section}{raw_section}
 
@@ -179,7 +183,7 @@ def run_report_v2_and_docx(
         raw_chunk = raw_text[start_pos:end_pos] if raw_text else ""
         revised = _api_revise_chapter(
             ch_title,
-            ch_body[:15000],
+            ch_body[:REVISE_CHAPTER_BODY_LIMIT],
             expert_text,
             hallucination_text,
             raw_chunk,

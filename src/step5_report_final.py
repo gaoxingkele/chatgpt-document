@@ -14,12 +14,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR, RAW_DIR
+from config import REPORT_DIR, RAW_DIR, RAW_LOAD_LIMIT_FINAL, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
 
 
-def _load_raw_content(raw_path: Path | None, max_chars: int = 100000) -> str:
+def _load_raw_content(raw_path: Path | None, max_chars: int = RAW_LOAD_LIMIT_FINAL) -> str:
     """加载原始语料，用于幻觉校验：报告 2.0 中未在原始语料出现的内容须删除。"""
     if not raw_path or not Path(raw_path).is_file():
         return ""
@@ -75,7 +75,7 @@ def _api_convert_chapter_to_prose(
 
 【原始语料】（ChatGPT 等对话的原始文本，为内容与事实的唯一起源）
 ---
-{raw_chunk[:40000]}
+{raw_chunk[:PROSE_RAW_LIMIT]}
 ---
 """
     prompt = f"""请将以下报告章节改写为**自然流畅的叙述性语言**，输出完整章节正文。
@@ -93,7 +93,7 @@ def _api_convert_chapter_to_prose(
 
 【本章原文（报告 2.0）】
 ---
-{chapter_body[:18000]}
+{chapter_body[:PROSE_CHAPTER_BODY_LIMIT]}
 ---
 
 请直接输出改写后的完整章节，以 `## {chapter_title}` 开头，使用 Markdown（### 等）。不要 JSON 或多余说明。"""

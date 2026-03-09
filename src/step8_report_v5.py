@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import REPORT_DIR, SKILL_DIR
+from config import REPORT_DIR, SKILL_DIR, COMPRESS_SKILL_TEXT_LIMIT, COMPRESS_SUMMARY_TEXT_LIMIT, COMPRESS_DOC_LIMIT
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
@@ -47,10 +47,10 @@ def _compress_one_iteration(
     """
     style_guide = f"""
 【写作规范 - Skill.md】（压缩时须继续遵循）
-{skill_text[:12000]}
+{skill_text[:COMPRESS_SKILL_TEXT_LIMIT]}
 
 【summary.md 要点】
-{summary_text[:8000]}
+{summary_text[:COMPRESS_SUMMARY_TEXT_LIMIT]}
 """
     prompt = f"""你是一位{role_label}精炼专家。请对以下文档进行**无损信息压缩**。
 
@@ -61,7 +61,7 @@ def _compress_one_iteration(
 4. **规范**：输出仍须严格遵循上方 Skill 与 summary 的结构、语域、论证范式。
 
 【当前文档】
-{doc_text[:60000]}
+{doc_text[:COMPRESS_DOC_LIMIT]}
 
 请直接输出压缩后的完整报告，保留全部章节标题与 Markdown 格式。不要 JSON 或说明。"""
 

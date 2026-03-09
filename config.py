@@ -81,5 +81,48 @@ MIN_CONTENT_BYTES = 1000   # 低于此字节数视为未完整遍历
 RETRY_WAIT_SECONDS = 15    # 重试前等待秒数
 CRAWL_MAX_RETRIES = 5      # 最大重试次数
 
+# ============ 内容截断限制（各 Step prompt 截取上限） ============
+# Step2 报告 1.0
+RAW_LOAD_LIMIT = 130_000               # 原始语料加载上限
+OUTLINE_RAW_LIMIT = 80_000             # 构建大纲时语料截取
+CHAPTER_INTRO_BODY_LIMIT = 25_000      # 章首章末正文截取
+SUPPLEMENT_RAW_LIMIT = 70_000          # 补充缺失：原始语料截取
+SUPPLEMENT_REPORT_LIMIT = 90_000       # 补充缺失：报告截取
+DEDUP_REPORT_LIMIT = 100_000           # 去重：报告截取
+ASSEMBLE_CHUNK_SIZE = 50_000           # 章节装配语料分块大小
+
+# Step2 报告 3.0（step2_report_v3）
+STRUCTURE_RAW_LIMIT = 60_000           # 规划结构时语料截取
+
+# Step3 专家评审
+EXPERT_PREVIEW_LIMIT = 60_000          # 专家评审报告截取
+
+# Step4 报告 2.0
+RAW_LOAD_LIMIT_V2 = 120_000            # 原始语料加载上限
+HALLUCINATION_TEXT_LIMIT = 8_000       # 幻觉清单截取
+REVISE_RAW_CHUNK_LIMIT = 35_000        # 整改时原始语料截取
+REVISE_EXPERT_LIMIT = 25_000           # 整改时专家意见截取
+REVISE_CHAPTER_BODY_LIMIT = 15_000     # 整改时章节正文截取
+
+# Step5 报告 3.0 最终版
+RAW_LOAD_LIMIT_FINAL = 100_000         # 原始语料加载上限
+PROSE_RAW_LIMIT = 40_000               # 改写时原始语料截取（幻觉校验）
+PROSE_CHAPTER_BODY_LIMIT = 18_000      # 改写时章节正文截取
+
+# Step6 报告 4.0
+CITATION_CHAPTER_BODY_LIMIT = 12_000   # 引用标注时章节正文截取
+
+# Step7 风格化
+POLICY_CHAPTER_BODY_LIMIT = 50_000     # 风格化章节正文截取
+POLICY_RAW_PREVIEW_LIMIT = 8_000       # 风格化单章原始语料截取
+SKILL_TEXT_LIMIT = 15_000              # Skill.md 截取
+SUMMARY_TEXT_LIMIT = 12_000            # summary.md 截取
+POLICY_RAW_TOTAL_LIMIT = 50_000        # 风格化原始语料总览截取
+
+# Step8 迭代压缩
+COMPRESS_SKILL_TEXT_LIMIT = 12_000     # 压缩时 Skill.md 截取
+COMPRESS_SUMMARY_TEXT_LIMIT = 8_000    # 压缩时 summary.md 截取
+COMPRESS_DOC_LIMIT = 60_000            # 压缩时文档截取
+
 for d in (OUTPUT_DIR, RAW_DIR, REPORT_DIR, EXPERT_DIR, SKILL_DIR, FILES_DIR):
     d.mkdir(parents=True, exist_ok=True)

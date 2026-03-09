@@ -12,12 +12,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import RAW_DIR, REPORT_DIR
+from config import RAW_DIR, REPORT_DIR, RAW_LOAD_LIMIT, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat
 from src.step4_report_v2 import md_to_docx
 
 
-def _load_raw_content(raw_path: Path, max_chars: int = 130000) -> str:
+def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT) -> str:
     text = raw_path.read_text(encoding="utf-8", errors="replace")
     if len(text) > max_chars:
         text = text[:max_chars] + "\n\n[内容已截断]"
@@ -78,7 +78,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
 
 原始语料（节选）：
 ---
-{content[:60000]}
+{content[:STRUCTURE_RAW_LIMIT]}
 ---
 
 请直接输出上述 JSON。"""

@@ -26,7 +26,12 @@ def _log(msg: str, api_call: str = ""):
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from config import RAW_DIR, REPORT_DIR
+from config import (
+    RAW_DIR, REPORT_DIR,
+    RAW_LOAD_LIMIT, OUTLINE_RAW_LIMIT, CHAPTER_INTRO_BODY_LIMIT,
+    SUPPLEMENT_RAW_LIMIT, SUPPLEMENT_REPORT_LIMIT, DEDUP_REPORT_LIMIT,
+    ASSEMBLE_CHUNK_SIZE,
+)
 from src.llm_client import chat
 
 
@@ -43,7 +48,7 @@ SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家，擅长分析�
 MAX_WORKERS = 4
 
 
-def _load_raw_content(raw_path: Path, max_chars: int = 130000) -> str:
+def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT) -> str:
     text = raw_path.read_text(encoding="utf-8", errors="replace")
     if len(text) > max_chars:
         text = text[:max_chars] + "\n\n[内容已截断，仅保留前 {} 字]".format(max_chars)
@@ -91,7 +96,7 @@ def _api_build_outline(content: str) -> dict:
 
 原始语料：
 ---
-{content[:80000]}
+{content[:OUTLINE_RAW_LIMIT]}
 ---
 
 直接输出 JSON，不要 markdown 代码块包裹。"""
@@ -210,7 +215,7 @@ def _api_add_chapter_intro_summary(
 
 【本章正文】
 ---
-{chapter_body[:25000]}
+{chapter_body[:CHAPTER_INTRO_BODY_LIMIT]}
 ---
 
 【要求】
@@ -234,8 +239,8 @@ def _api_supplement_missing(raw_content: str, report_text: str, step_desc: str =
     if step_desc:
         _log(step_desc)
     t0 = time.time()
-    raw_chunk = raw_content[:70000]
-    report_chunk = report_text[:90000]
+    raw_chunk = raw_content[:SUPPLEMENT_RAW_LIMIT]
+    report_chunk = report_text[:SUPPLEMENT_REPORT_LIMIT]
     prompt = f"""请对比以下「原始语料」与「报告 1.0」，完成补充任务。
 
 【任务】
@@ -276,7 +281,7 @@ def _api_deduplicate(report_text: str, step_desc: str = "") -> str:
     if step_desc:
         _log(step_desc)
     t0 = time.time()
-    report_chunk = report_text[:100000]
+    report_chunk = report_text[:DEDUP_REPORT_LIMIT]
     prompt = f"""请对以下「报告 1.0」进行**重复内容去重**。
 
 【任务】
@@ -312,7 +317,7 @@ def _assemble_chapter(
     content: str,
     chapter_title: str,
     level2_list: list,
-    chunk_size: int = 50000,
+    chunk_size: int = ASSEMBLE_CHUNK_SIZE,
     chapter_idx: int = 0,
 ) -> str:
     """
