@@ -24,9 +24,7 @@ from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
 from src.step6_report_v4 import _read_report_text
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 
 def _load_skill_and_summary(policy_name: str = "policy1") -> tuple[str, str]:

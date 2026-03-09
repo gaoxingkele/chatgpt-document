@@ -17,14 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from config import REPORT_DIR, RAW_DIR, RAW_LOAD_LIMIT_FINAL, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
-
-
-def _load_raw_content(raw_path: Path | None, max_chars: int = RAW_LOAD_LIMIT_FINAL) -> str:
-    """加载原始语料，用于幻觉校验：报告 2.0 中未在原始语料出现的内容须删除。"""
-    if not raw_path or not Path(raw_path).is_file():
-        return ""
-    text = Path(raw_path).read_text(encoding="utf-8", errors="replace")
-    return text[:max_chars] + ("\n\n[已截断]" if len(text) > max_chars else "")
+from src.utils.file_utils import load_raw_content as _load_raw_content
 
 STYLE_PROMPTS = {
     "A": {
@@ -54,9 +47,7 @@ STYLE_PROMPTS = {
 }
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 
 def _api_convert_chapter_to_prose(

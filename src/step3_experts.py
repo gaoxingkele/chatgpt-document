@@ -15,9 +15,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -25,6 +22,7 @@ from config import REPORT_DIR, EXPERT_DIR, EXPERT_PREVIEW_LIMIT
 from src.llm_client import chat
 from src.llm_client import perplexity_chat_with_citations
 from src.report_type_profiles import load_report_type_profile
+from src.utils.log import log as _log
 
 
 EXPERT_1_SYSTEM = """你是一位严谨的「事实与逻辑」评审专家。你的评审重点：

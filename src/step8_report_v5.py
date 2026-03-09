@@ -22,9 +22,7 @@ from src.step6_report_v4 import _read_report_text
 from src.step7_report_policy import _load_skill_and_summary
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 
 # Prompt RL 参数

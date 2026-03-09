@@ -28,9 +28,7 @@ CORPUS_EXTENSIONS = {
 MAX_CHARS_PER_CALL = 100000
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 
 def _read_file_content(f: Path, _log_fn) -> str:

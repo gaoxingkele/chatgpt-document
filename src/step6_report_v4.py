@@ -45,9 +45,7 @@ def _read_report_text(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 
 def _process_chapter_with_perplexity(chapter_title: str, chapter_body: str) -> tuple[str, list[dict]]:

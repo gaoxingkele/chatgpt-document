@@ -11,9 +11,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -23,6 +20,7 @@ from config import (
     REVISE_RAW_CHUNK_LIMIT, REVISE_EXPERT_LIMIT, REVISE_CHAPTER_BODY_LIMIT,
 )
 from src.llm_client import chat
+from src.utils.log import log as _log
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -44,12 +42,7 @@ def _load_hallucination_list(base: str) -> str:
     return ""
 
 
-def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT_V2) -> str:
-    """加载原始语料，用于补充论述逻辑与篇幅约束。"""
-    if not raw_path or not Path(raw_path).is_file():
-        return ""
-    text = Path(raw_path).read_text(encoding="utf-8", errors="replace")
-    return text[:max_chars] + ("\n\n[已截断]" if len(text) > max_chars else "")
+from src.utils.file_utils import load_raw_content as _load_raw_content
 
 
 def _parse_report_v1_chapters(text: str) -> tuple[str, list[tuple[str, str]]]:

@@ -3,15 +3,12 @@
 多平台采集入口：根据 URL 或文件路径自动识别来源并分发到对应处理器。
 """
 import re
-import time
 from pathlib import Path
 
 from config import RAW_DIR, PROJECT_ROOT, MIN_CONTENT_BYTES
 
 
-def _log(msg: str):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    print(f"[{ts}] {msg}", flush=True)
+from src.utils.log import log as _log
 
 # URL 模式 → 平台标识
 _URL_PATTERNS = [

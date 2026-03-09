@@ -15,13 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from config import RAW_DIR, REPORT_DIR, RAW_LOAD_LIMIT, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat
 from src.step4_report_v2 import md_to_docx
-
-
-def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT) -> str:
-    text = raw_path.read_text(encoding="utf-8", errors="replace")
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n\n[内容已截断]"
-    return text
+from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json
 
 
 # 章节序号对应中文大写
@@ -30,12 +24,7 @@ _CHAPTER_CN = ("一", "二", "三", "四", "五", "六", "七")
 
 def _parse_structure(json_str: str) -> list:
     """解析结构 JSON，返回章节列表。"""
-    s = json_str.strip()
-    for start in ("```json", "```"):
-        if s.startswith(start):
-            s = s[len(start):].strip()
-        if s.endswith("```"):
-            s = s[:-3].strip()
+    s = clean_json(json_str)
     try:
         data = json.loads(s)
         return data.get("chapters", data) if isinstance(data, dict) else data

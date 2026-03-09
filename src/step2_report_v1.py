@@ -19,10 +19,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _log(msg: str, api_call: str = ""):
-    ts = time.strftime("%H:%M:%S", time.localtime())
-    prefix = f"[{ts}] [API#{api_call}] " if api_call else f"[{ts}] "
-    print(prefix + msg, flush=True)
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -33,6 +29,8 @@ from config import (
     ASSEMBLE_CHUNK_SIZE,
 )
 from src.llm_client import chat
+from src.utils.log import log as _log
+from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json as _clean_json
 
 
 SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家，擅长分析语料、构建文档结构、组织内容。
@@ -46,22 +44,6 @@ SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家，擅长分析�
 
 # 并行工作线程数（章节装配 / 专家评审）
 MAX_WORKERS = 4
-
-
-def _load_raw_content(raw_path: Path, max_chars: int = RAW_LOAD_LIMIT) -> str:
-    text = raw_path.read_text(encoding="utf-8", errors="replace")
-    if len(text) > max_chars:
-        text = text[:max_chars] + "\n\n[内容已截断，仅保留前 {} 字]".format(max_chars)
-    return text
-
-
-def _clean_json(text: str) -> str:
-    for start in ("```json", "```"):
-        if text.strip().startswith(start):
-            text = text.strip()[len(start):].strip()
-        if text.strip().endswith("```"):
-            text = text.strip()[:-3].strip()
-    return text.strip()
 
 
 def _api_build_outline(content: str) -> dict:
