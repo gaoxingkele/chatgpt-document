@@ -506,7 +506,7 @@ def main():
     subparsers_map["full-report"] = pfr
     pfr.add_argument("input", help="语料目录或单文件路径")
     pfr.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
-    pfr.add_argument("-p", "--provider", default="gemini", choices=["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"])
+    pfr.add_argument("-p", "--provider", default=None, choices=["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"], help="指定 LLM Provider（默认跟随 LLM_PROVIDER 环境变量）")
     pfr.add_argument("-r", "--recursive", action="store_true", help="语料目录递归读取")
     pfr.add_argument("--policy", default="policy1", help="Step7/Step8 使用的 skill 子目录")
     _add_report_type_arg(pfr)
