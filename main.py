@@ -109,6 +109,28 @@ def _add_report_type_arg(parser: argparse.ArgumentParser):
     )
 
 
+def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None):
+    """共享 pipeline：1.0 → 专家 → 2.0 → 3.0 最终版。由 cmd_batch/cmd_all 调用。"""
+    from src.step2_report_v1 import run_meta_and_report_v1
+
+    _log_step("Step2 报告 1.0")
+    r1 = run_meta_and_report_v1(raw_path, base)
+    report_v1_path = Path(r1["report_v1_path"])
+
+    _log_step("Step3 专家评审")
+    from src.step3_experts import run_experts
+    run_experts(report_v1_path, base, report_type)
+
+    _log_step("Step4 报告 2.0")
+    from src.step4_report_v2 import run_report_v2_and_docx
+    run_report_v2_and_docx(report_v1_path, None, base, raw_path)
+
+    _log_step("Step5 报告 3.0 最终版")
+    report_v2_path = _find_report(base, "report_v2")
+    from src.step5_report_final import run_report_final
+    run_report_final(report_v2_path, base, style, raw_path)
+
+
 def cmd_batch(args):
     """Step0 语料重整 + 全流程：读取目录语料 → 去重排序 → 1.0 → 专家 → 2.0 → 3.0"""
     _apply_provider(getattr(args, "provider", None))
@@ -117,8 +139,6 @@ def cmd_batch(args):
     if not dir_path.is_absolute():
         dir_path = Path.cwd() / dir_path
     base = args.output or dir_path.name
-    style = getattr(args, "final_style", "A")
-    report_type = getattr(args, "report_type", None)
 
     _log_banner("批量语料流程开始")
     print(f"  目录: {dir_path}", flush=True)
@@ -126,21 +146,7 @@ def cmd_batch(args):
     _log_step("Step0 语料重整")
     raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
 
-    _log_step("Step2 报告 1.0")
-    from src.step2_report_v1 import run_meta_and_report_v1
-    r1 = run_meta_and_report_v1(raw_path, base)
-    report_v1_path = Path(r1["report_v1_path"])
-
-    _log_step("Step3 专家评审")
-    cmd_experts(argparse.Namespace(report_v1=report_v1_path, output_base=base, report_type=report_type))
-
-    _log_step("Step4 报告 2.0")
-    cmd_report_v2(argparse.Namespace(report_v1=report_v1_path, expert_file=None, output_base=base, raw_file=raw_path))
-
-    _log_step("Step5 报告 3.0 最终版")
-    report_v2_path = _find_report(base, "report_v2")
-    cmd_report_final(argparse.Namespace(report_v2=report_v2_path, output_base=base, style=style, raw_file=raw_path))
-
+    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None))
     _log_banner("批量语料流程完成")
 
 
@@ -230,26 +236,11 @@ def cmd_all(args):
     _log_banner("全流程开始")
     print(f"  输入: {args.input}", flush=True)
 
-    from src.step2_report_v1 import run_meta_and_report_v1
     from src.ingest.sources import run_ingest
     raw_path = run_ingest(args.input, args.output)
     base = args.output or (raw_path.stem if raw_path else "share")
-    style = getattr(args, "final_style", "A")
-    report_type = getattr(args, "report_type", None)
 
-    _log_step("Step2 报告 1.0")
-    r1 = run_meta_and_report_v1(raw_path, base)
-    report_v1_path = Path(r1["report_v1_path"])
-
-    _log_step("Step3 专家评审")
-    cmd_experts(argparse.Namespace(report_v1=report_v1_path, output_base=base, report_type=report_type))
-
-    _log_step("Step4 报告 2.0")
-    cmd_report_v2(argparse.Namespace(report_v1=report_v1_path, expert_file=None, output_base=base, raw_file=raw_path))
-
-    _log_step("Step5 报告 3.0 最终版")
-    report_v2_path = _find_report(base, "report_v2")
-    cmd_report_final(argparse.Namespace(report_v2=report_v2_path, output_base=base, style=style, raw_file=raw_path))
+    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None))
 
     elapsed = time.time() - t_start
     _log_banner(f"全流程完成，总耗时 {elapsed/60:.1f} 分钟")
@@ -287,29 +278,27 @@ def cmd_full_report(args):
     else:
         raise FileNotFoundError(f"输入不存在: {input_path}")
 
-    cmd_report_v1(argparse.Namespace(raw_file=raw_path, output_base=base))
-    report_v1_path = REPORT_DIR / f"{base}_report_v1.md"
+    # Step2~Step5: 共享 pipeline
+    _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type)
 
-    cmd_experts(argparse.Namespace(report_v1=report_v1_path, output_base=base, report_type=report_type))
-    cmd_report_v2(argparse.Namespace(report_v1=report_v1_path, expert_file=None, output_base=base, raw_file=raw_path))
-
-    report_v2_path = _find_report(base, "report_v2")
-    cmd_report_final(argparse.Namespace(report_v2=report_v2_path, output_base=base, style=getattr(args, "style", "A"), raw_file=raw_path))
-
+    # Step6~Step8: 扩展流程
     report_v3_path = _find_report(base, "report_v3")
-    cmd_report_v4(argparse.Namespace(report_v3=report_v3_path, output_base=base))
+    from src.step6_report_v4 import run_report_v4
+    run_report_v4(report_v3_path, base)
 
     report_v4_path = _find_report(base, "report_v4", ext=".docx")
     if not report_v4_path.is_file():
         report_v4_path = _find_report(base, "report_v4")
-    cmd_report_policy(argparse.Namespace(raw=raw_path, report=report_v4_path, output_base=base, policy=policy, report_type=report_type))
+    from src.step7_report_policy import run_report_policy
+    run_report_policy(raw_path, report_v4_path, base, policy, report_type)
 
     profile = load_report_type_profile(report_type)
     step7_suffix = profile.get("step7_title_suffix", "学术风格分析报告")
     policy_report = _find_report(base, step7_suffix, ext=".docx")
     if not policy_report.is_file():
         policy_report = _find_report(base, step7_suffix)
-    cmd_report_v5(argparse.Namespace(report=policy_report, output_base=base, policy=policy, report_type=report_type))
+    from src.step8_report_v5 import run_report_v5
+    run_report_v5(policy_report, base, policy, report_type)
 
     _log_banner("Step1~Step8 完成，1.0~5.0 已输出至 output/reports")
 
