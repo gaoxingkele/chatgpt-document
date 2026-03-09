@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import REPORT_DIR, RAW_DIR
-from src.kimi_client import chat
+from src.llm_client import chat
 from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
 
 

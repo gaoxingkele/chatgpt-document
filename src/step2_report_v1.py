@@ -27,7 +27,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import RAW_DIR, REPORT_DIR
-from src.kimi_client import chat
+from src.llm_client import chat
 
 
 SYSTEM_PROMPT = """你是一位专业的研究报告撰写专家，擅长分析语料、构建文档结构、组织内容。

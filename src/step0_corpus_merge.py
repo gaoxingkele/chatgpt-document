@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import RAW_DIR
-from src.kimi_client import chat
+from src.llm_client import chat
 from src.ingest.file_importer import import_from_file
 from src.corpus_extractors import extract_from_docx, extract_from_pdf, extract_from_image
 

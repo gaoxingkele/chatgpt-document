@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import REPORT_DIR, EXPERT_DIR, RAW_DIR
-from src.kimi_client import chat
+from src.llm_client import chat
 from docx import Document
 from docx.shared import Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH

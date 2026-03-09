@@ -9,7 +9,7 @@ from typing import Callable, Optional
 
 
 def _get_vision_api() -> Callable[[list], str]:
-    from src.kimi_client import chat_vision
+    from src.llm_client import chat_vision
     return chat_vision
 
 
