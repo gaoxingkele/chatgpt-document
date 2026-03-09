@@ -6,13 +6,10 @@ Step8：基于 Prompt RL 的迭代压缩，生成报告 5.0。
 每步遵循 Skill 规范，输出 5.0 版本。
 """
 import re
-import sys
 import time
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, SKILL_DIR, COMPRESS_SKILL_TEXT_LIMIT, COMPRESS_SUMMARY_TEXT_LIMIT, COMPRESS_DOC_LIMIT
 from src.llm_client import chat

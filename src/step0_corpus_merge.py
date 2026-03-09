@@ -4,14 +4,11 @@ Step0: 批量语料重整。
 读取指定目录下所有语料文件，调用云端大模型 API 进行去重、排序，输出合成本地语料文件。
 供后续 1.0、2.0、3.0 文档流程使用。
 """
-import sys
 import time
 from pathlib import Path
 from typing import List, Tuple
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import RAW_DIR
 from src.llm_client import chat

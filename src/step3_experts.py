@@ -7,16 +7,11 @@ Step3: 并行调用 LLM API 生成 5 个评审专家 Agent：
 
 所有 5 位专家并行调用，大幅缩短 Step3 总耗时。
 """
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, EXPERT_DIR, EXPERT_PREVIEW_LIMIT
 from src.llm_client import chat

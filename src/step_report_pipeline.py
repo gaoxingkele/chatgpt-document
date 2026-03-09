@@ -4,12 +4,9 @@
 重点：报告 2.0 总体字数不得比原始语料低太多，扣除重复后尽量保持原文，采用重写使每章顺畅。
 """
 import json
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, EXPERT_DIR
 from src.kimi_client import chat, chat_append

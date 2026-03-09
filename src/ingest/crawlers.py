@@ -7,10 +7,7 @@ import asyncio
 import os
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-import sys
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import MIN_CONTENT_BYTES, RETRY_WAIT_SECONDS, CRAWL_MAX_RETRIES
 

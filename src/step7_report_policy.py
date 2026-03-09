@@ -4,14 +4,11 @@ Step7（可选）：根据原始语料与最新版报告，采用 Skill.md 与 s
 输出学术风格分析报告。支持并行章节处理，provider 由环境变量或参数指定。
 """
 import re
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import (
     REPORT_DIR, RAW_DIR, SKILL_DIR,

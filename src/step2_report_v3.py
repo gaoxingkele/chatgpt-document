@@ -5,12 +5,9 @@
 """
 import json
 import re
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import RAW_DIR, REPORT_DIR, RAW_LOAD_LIMIT, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat

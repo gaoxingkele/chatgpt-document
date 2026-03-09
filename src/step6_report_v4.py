@@ -6,13 +6,10 @@ Step6: 对报告 3.0 进行事实核查与出处标注，生成报告 4.0。
 - 引用编码按章节顺序递增，调用次数 = 章节数
 """
 import re
-import sys
 import time
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT
 from src.llm_client import perplexity_chat_with_citations

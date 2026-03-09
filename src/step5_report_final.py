@@ -5,14 +5,11 @@ Step5: 在报告 2.0 基础上生成 3.0 最终版。
 - 支持三种文档风格：A=商业模式设计报告，B=可行性研究报告，C=学术综述
 """
 import re
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, RAW_DIR, RAW_LOAD_LIMIT_FINAL, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat

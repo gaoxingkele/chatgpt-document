@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 """Kimi API 客户端。现统一由 llm_client 调度，支持多 Provider 切换。"""
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import KIMI_API_KEY, KIMI_BASE_URL, KIMI_MODEL, KIMI_VISION_MODEL
 from src.llm_client import chat as _chat, chat_vision as _chat_vision
