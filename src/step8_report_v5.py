@@ -17,8 +17,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from config import REPORT_DIR, SKILL_DIR, COMPRESS_SKILL_TEXT_LIMIT, COMPRESS_SUMMARY_TEXT_LIMIT, COMPRESS_DOC_LIMIT
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
-from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
-from src.step6_report_v4 import _read_report_text
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
+from src.utils.docx_utils import md_to_docx
 from src.step7_report_policy import _load_skill_and_summary
 
 

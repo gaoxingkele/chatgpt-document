@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import RAW_DIR, REPORT_DIR, RAW_LOAD_LIMIT, STRUCTURE_RAW_LIMIT
 from src.llm_client import chat
-from src.step4_report_v2 import md_to_docx
+from src.utils.docx_utils import md_to_docx
 from src.utils.file_utils import load_raw_content as _load_raw_content, clean_json
 
 

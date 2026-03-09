@@ -132,7 +132,7 @@ def run_pipeline(raw_path: Path, output_basename: str = None) -> dict:
     print(f"[流水线] 报告 2.0 (Markdown) 已保存: {report_v2_path}")
 
     # 转为 Word
-    from src.step4_report_v2 import md_to_docx
+    from src.utils.docx_utils import md_to_docx
     docx_path = REPORT_DIR / f"{base}_report_v2.docx"
     try:
         md_to_docx(report_v2_text, docx_path)

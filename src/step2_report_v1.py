@@ -462,7 +462,7 @@ def run_meta_and_report_v1(raw_path: Path, output_basename: str = None) -> dict:
     report_v1_path.write_text(report_v1_text, encoding="utf-8")
     _log(f"Step2 报告 1.0 定稿：约 {len(report_v1_text)} 字，已保存 {report_v1_path.name}")
 
-    from src.step4_report_v2 import md_to_docx
+    from src.utils.docx_utils import md_to_docx
     _log("Step2 导出 Word：报告 1.0 → .docx（格式同 2.0）")
     docx_path = REPORT_DIR / f"{base}_report_v1.docx"
     try:

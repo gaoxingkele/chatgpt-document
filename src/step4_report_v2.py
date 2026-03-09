@@ -21,9 +21,8 @@ from config import (
 )
 from src.llm_client import chat
 from src.utils.log import log as _log
-from docx import Document
-from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
+from src.utils.docx_utils import md_to_docx
 import re
 
 
@@ -43,28 +42,6 @@ def _load_hallucination_list(base: str) -> str:
 
 
 from src.utils.file_utils import load_raw_content as _load_raw_content
-
-
-def _parse_report_v1_chapters(text: str) -> tuple[str, list[tuple[str, str]]]:
-    """
-    解析报告 1.0：提取正文前的头部（标题、摘要、关键词），及章节列表 [(章标题, 章正文), ...]。
-    章标题匹配 ## 一、 ## 二、 ... 或 ## 1. ## 2. ...
-    """
-    # 匹配 ## 一、xxx 或 ## 1. xxx
-    pattern = re.compile(r"^##\s+[一二三四五六七八九十]+、.+$|^##\s+\d+\.\s+.+$", re.MULTILINE)
-    matches = list(pattern.finditer(text))
-    if not matches:
-        return text, []
-
-    header = text[: matches[0].start()].strip()
-    chapters: list[tuple[str, str]] = []
-    for i, m in enumerate(matches):
-        title = m.group(0).strip()
-        body_start = m.end()
-        body_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
-        body = text[body_start:body_end].strip()
-        chapters.append((title, body))
-    return header, chapters
 
 
 def _api_revise_chapter(
@@ -225,130 +202,6 @@ def run_report_v2_and_docx(
         "docx_path": str(docx_path),
         "report_v2_text": report_v2_text,
     }
-
-
-def _add_runs_with_bold(paragraph, text: str, font_size) -> None:
-    """将文本中的 **xxx** 解析为加粗，其余为普通。"""
-    parts = re.split(r"(\*\*[^*]+\*\*)", text)
-    for part in parts:
-        if part.startswith("**") and part.endswith("**"):
-            r = paragraph.add_run(part[2:-2])
-            r.bold = True
-            r.font.size = font_size
-            r.font.name = "宋体"
-        elif part:
-            r = paragraph.add_run(part)
-            r.font.size = font_size
-            r.font.name = "宋体"
-
-
-def md_to_docx(md_text: str, docx_path: Path) -> None:
-    """将 Markdown 转为 Word：标题层级字号/粗体，段落/列表/表格，正文内 **加粗**。"""
-    doc = Document()
-    doc.styles["Normal"].font.size = Pt(12)
-    doc.styles["Normal"].font.name = "宋体"
-
-    lines = md_text.replace("\r\n", "\n").split("\n")
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.strip()
-
-        # 一级标题 # -> 18pt 加粗
-        if stripped.startswith("# ") and not stripped.startswith("## "):
-            p = doc.add_paragraph(stripped[2:].strip())
-            p.style = "Heading 1"
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(18)
-            p.runs[0].font.name = "黑体"
-            i += 1
-            continue
-
-        # 二级标题 ## -> 16pt 加粗
-        if stripped.startswith("## ") and not stripped.startswith("### "):
-            p = doc.add_paragraph(stripped[3:].strip())
-            p.style = "Heading 2"
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(16)
-            p.runs[0].font.name = "黑体"
-            i += 1
-            continue
-
-        # 三级标题 ### -> 14pt 加粗
-        if stripped.startswith("### "):
-            p = doc.add_paragraph(stripped[4:].strip())
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(14)
-            p.runs[0].font.name = "黑体"
-            i += 1
-            continue
-
-        # Markdown 表格：| a | b |
-        if stripped.startswith("|") and "|" in stripped[1:]:
-            table_lines = []
-            while i < len(lines) and lines[i].strip().startswith("|"):
-                table_lines.append(lines[i])
-                i += 1
-            _add_md_table(doc, table_lines)
-            continue
-
-        # 无序列表 - 或 *
-        if stripped.startswith("- ") or stripped.startswith("* "):
-            text = stripped[2:].strip()
-            p = doc.add_paragraph(style="List Bullet")
-            _add_runs_with_bold(p, text, Pt(12))
-            i += 1
-            continue
-
-        # 有序列表 1. 2.
-        if re.match(r"^\d+\.\s", stripped):
-            text = re.sub(r"^\d+\.\s", "", stripped)
-            p = doc.add_paragraph(style="List Number")
-            _add_runs_with_bold(p, text, Pt(12))
-            i += 1
-            continue
-
-        # 空行
-        if not stripped:
-            i += 1
-            continue
-
-        # 普通段落（支持 **加粗**）
-        p = doc.add_paragraph()
-        p.paragraph_format.first_line_indent = Pt(24)
-        _add_runs_with_bold(p, stripped, Pt(12))
-        i += 1
-
-    doc.save(str(docx_path))
-
-
-def _add_md_table(doc, table_lines: list) -> None:
-    """解析 Markdown 表格行并写入 docx。"""
-    if len(table_lines) < 2:
-        return
-    rows = []
-    for ln in table_lines:
-        cells = [c.strip() for c in ln.split("|") if c.strip()]
-        if cells and not all(re.match(r"^[-:]+$", c) for c in cells):
-            rows.append(cells)
-    if not rows:
-        return
-    col_count = max(len(r) for r in rows)
-    table = doc.add_table(rows=len(rows), cols=col_count)
-    table.style = "Table Grid"
-    for ri, row_cells in enumerate(rows):
-        for ci, cell_text in enumerate(row_cells):
-            if ci < col_count:
-                cell = table.rows[ri].cells[ci]
-                cell.text = cell_text
-                for p in cell.paragraphs:
-                    for r in p.runs:
-                        r.font.size = Pt(10.5)
-                if ri == 0:
-                    for p in cell.paragraphs:
-                        for r in p.runs:
-                            r.bold = True
-    doc.add_paragraph()
 
 
 if __name__ == "__main__":

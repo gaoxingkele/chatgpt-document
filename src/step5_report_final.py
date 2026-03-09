@@ -16,7 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import REPORT_DIR, RAW_DIR, RAW_LOAD_LIMIT_FINAL, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
-from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
+from src.utils.docx_utils import md_to_docx
 from src.utils.file_utils import load_raw_content as _load_raw_content
 
 STYLE_PROMPTS = {

@@ -16,35 +16,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT
 from src.llm_client import perplexity_chat_with_citations
-from src.step4_report_v2 import _parse_report_v1_chapters, md_to_docx
-
-
-def _read_report_text(path: Path) -> str:
-    """读取报告内容，支持 .md 和 .docx。"""
-    path = Path(path)
-    suffix = path.suffix.lower()
-    if suffix == ".docx":
-        from docx import Document
-        doc = Document(path)
-        lines = []
-        for p in doc.paragraphs:
-            t = p.text.strip()
-            if not t:
-                lines.append("")
-                continue
-            style = (p.style.name or "").lower()
-            if "heading 1" in style:
-                lines.append(f"# {t}")
-            elif "heading 2" in style:
-                lines.append(f"## {t}")
-            elif "heading 3" in style:
-                lines.append(f"### {t}")
-            else:
-                lines.append(t)
-        return "\n".join(lines)
-    return path.read_text(encoding="utf-8", errors="replace")
-
-
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
+from src.utils.docx_utils import md_to_docx
 from src.utils.log import log as _log
 
 
