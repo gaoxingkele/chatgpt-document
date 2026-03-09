@@ -15,6 +15,25 @@ from config import RAW_DIR, REPORT_DIR, FILES_DIR
 from src.report_type_profiles import list_supported_report_types, load_report_type_profile
 
 REPORT_TYPE_CHOICES = list_supported_report_types()
+_PROVIDER_CHOICES = ["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"]
+
+
+def _add_provider_arg(parser: argparse.ArgumentParser):
+    """为子命令添加 -p/--provider 参数。"""
+    parser.add_argument(
+        "-p", "--provider",
+        default=None,
+        choices=_PROVIDER_CHOICES,
+        help="指定 LLM Provider（覆盖 .env 中的 LLM_PROVIDER）",
+    )
+
+
+def _resolve_path(path, default_dir: Path) -> Path:
+    """相对路径解析：非绝对路径时拼接 default_dir / filename。"""
+    p = Path(path) if not isinstance(path, Path) else path
+    if not p.is_absolute():
+        p = default_dir / p.name
+    return p
 
 
 def cmd_install_browser(args):
@@ -122,9 +141,7 @@ def cmd_batch(args):
 
 def cmd_report_v1(args):
     from src.step2_report_v1 import run_meta_and_report_v1
-    raw_path = Path(args.raw_file)
-    if not raw_path.is_absolute():
-        raw_path = RAW_DIR / raw_path.name
+    raw_path = _resolve_path(args.raw_file, RAW_DIR)
     run_meta_and_report_v1(raw_path, args.output_base)
     base = args.output_base or raw_path.stem
     return REPORT_DIR / f"{base}_report_v1.md"
@@ -132,48 +149,36 @@ def cmd_report_v1(args):
 
 def cmd_experts(args):
     from src.step3_experts import run_experts
-    report_v1 = Path(args.report_v1)
-    if not report_v1.is_absolute():
-        report_v1 = REPORT_DIR / report_v1.name
+    report_v1 = _resolve_path(args.report_v1, REPORT_DIR)
     run_experts(report_v1, args.output_base, getattr(args, "report_type", None))
 
 
 def cmd_report_v3(args):
     """报告 3.0：先规划结构，再逐章分段生成，篇幅充足、不丢失信息。"""
     from src.step2_report_v3 import run_report_v3
-    raw_path = Path(args.raw_file)
-    if not raw_path.is_absolute():
-        raw_path = RAW_DIR / raw_path.name
+    raw_path = _resolve_path(args.raw_file, RAW_DIR)
     run_report_v3(raw_path, args.output_base)
 
 
 def cmd_report_v2(args):
     from src.step4_report_v2 import run_report_v2_and_docx
-    report_v1 = Path(args.report_v1)
-    if not report_v1.is_absolute():
-        report_v1 = REPORT_DIR / report_v1.name
+    report_v1 = _resolve_path(args.report_v1, REPORT_DIR)
     expert = Path(args.expert_file) if args.expert_file else None
-    raw_path = Path(args.raw_file) if getattr(args, "raw_file", None) else None
-    if raw_path and not raw_path.is_absolute():
-        raw_path = RAW_DIR / raw_path.name
+    raw_path = _resolve_path(args.raw_file, RAW_DIR) if getattr(args, "raw_file", None) else None
     run_report_v2_and_docx(report_v1, expert, args.output_base, raw_path)
 
 
 def cmd_report_v4(args):
     """报告 4.0：对 3.0 做事实核查与出处标注，调用 Perplexity 获取引用，在正文插入 [n] 标记并生成 References。"""
     from src.step6_report_v4 import run_report_v4
-    report_v3 = Path(args.report_v3)
-    if not report_v3.is_absolute():
-        report_v3 = REPORT_DIR / report_v3.name
+    report_v3 = _resolve_path(args.report_v3, REPORT_DIR)
     run_report_v4(report_v3, args.output_base)
 
 
 def cmd_report_v5(args):
     """Step8：基于 Step7 输出，Prompt RL 迭代压缩，输出报告 5.0。使用 Gemini API。"""
     from src.step8_report_v5 import run_report_v5
-    report_path = Path(args.report)
-    if not report_path.is_absolute():
-        report_path = REPORT_DIR / report_path.name
+    report_path = _resolve_path(args.report, REPORT_DIR)
     run_report_v5(
         report_path,
         args.output_base,
@@ -185,12 +190,8 @@ def cmd_report_v5(args):
 def cmd_report_policy(args):
     """Step7（可选）：根据原始语料与最新报告，采用 Skill/summary 风格化，输出学术风格分析报告。使用 Gemini API。"""
     from src.step7_report_policy import run_report_policy
-    raw_path = Path(args.raw)
-    report_path = Path(args.report)
-    if not raw_path.is_absolute():
-        raw_path = RAW_DIR / raw_path.name
-    if not report_path.is_absolute():
-        report_path = REPORT_DIR / report_path.name
+    raw_path = _resolve_path(args.raw, RAW_DIR)
+    report_path = _resolve_path(args.report, REPORT_DIR)
     run_report_policy(
         raw_path,
         report_path,
@@ -203,12 +204,8 @@ def cmd_report_policy(args):
 def cmd_report_final(args):
     """报告 3.0 最终版：在 2.0 基础上改写，列表→自然叙述，支持风格 A/B/C；须传入原始语料用于幻觉校验。"""
     from src.step5_report_final import run_report_final
-    report_v2 = Path(args.report_v2)
-    if not report_v2.is_absolute():
-        report_v2 = REPORT_DIR / report_v2.name
-    raw_path = Path(args.raw_file) if getattr(args, "raw_file", None) else None
-    if raw_path and not raw_path.is_absolute():
-        raw_path = RAW_DIR / raw_path.name
+    report_v2 = _resolve_path(args.report_v2, REPORT_DIR)
+    raw_path = _resolve_path(args.raw_file, RAW_DIR) if getattr(args, "raw_file", None) else None
     run_report_final(report_v2, args.output_base, args.style, raw_path)
 
 
@@ -419,7 +416,7 @@ def main():
     p0b2.add_argument("-o", "--output", default=None, help="输出文件名前缀")
     p0b2.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
     p0b2.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
-    p0b2.add_argument("-p", "--provider", choices=["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"], help="指定 LLM Provider（覆盖 .env 中的 LLM_PROVIDER）")
+    _add_provider_arg(p0b2)
     _add_report_type_arg(p0b2)
     p0b2.set_defaults(func=cmd_batch)
 
@@ -486,7 +483,7 @@ def main():
     p0.add_argument("input", help="本地文件路径或分享链接")
     p0.add_argument("-o", "--output", default=None, help="各步骤输出文件名前缀")
     p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
-    p0.add_argument("-p", "--provider", choices=["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"], help="指定 LLM Provider（覆盖 .env 中的 LLM_PROVIDER）")
+    _add_provider_arg(p0)
     _add_report_type_arg(p0)
     p0.set_defaults(func=cmd_all)
 
@@ -506,7 +503,7 @@ def main():
     subparsers_map["full-report"] = pfr
     pfr.add_argument("input", help="语料目录或单文件路径")
     pfr.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
-    pfr.add_argument("-p", "--provider", default=None, choices=["kimi", "gemini", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity", "claude"], help="指定 LLM Provider（默认跟随 LLM_PROVIDER 环境变量）")
+    _add_provider_arg(pfr)
     pfr.add_argument("-r", "--recursive", action="store_true", help="语料目录递归读取")
     pfr.add_argument("--policy", default="policy1", help="Step7/Step8 使用的 skill 子目录")
     _add_report_type_arg(pfr)
