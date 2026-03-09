@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-统一 LLM 客户端：支持 Kimi、OpenAI、Grok、Perplexity、Claude、Gemini。
+统一 LLM 客户端：支持 Kimi、Gemini、Grok、MiniMax、GLM、Qwen、DeepSeek、OpenAI、Perplexity、Claude。
 通过 LLM_PROVIDER 环境变量或 provider 参数切换。
 """
 import os
@@ -17,30 +17,55 @@ from openai import OpenAI
 from config import (
     LLM_PROVIDER,
     KIMI_API_KEY, KIMI_BASE_URL, KIMI_MODEL, KIMI_VISION_MODEL,
-    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
+    GEMINI_API_KEY, GEMINI_MODEL,
     GROK_API_KEY, GROK_BASE_URL, GROK_MODEL,
+    MINIMAX_API_KEY, MINIMAX_BASE_URL, MINIMAX_MODEL,
+    GLM_API_KEY, GLM_BASE_URL, GLM_MODEL, GLM_VISION_MODEL,
+    QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL,
+    DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
+    OPENAI_API_KEY, OPENAI_BASE_URL, OPENAI_MODEL,
     PERPLEXITY_API_KEY, PERPLEXITY_BASE_URL, PERPLEXITY_MODEL,
     ANTHROPIC_API_KEY, ANTHROPIC_MODEL,
-    GEMINI_API_KEY, GEMINI_MODEL,
 )
 
-HTTP_TIMEOUT = httpx.Timeout(60.0, read=180.0)
+HTTP_TIMEOUT = httpx.Timeout(60.0, read=600.0)
 
+# 所有 OpenAI 兼容 provider 的配置
 PROVIDER_CONFIG = {
     "kimi": {
         "key": KIMI_API_KEY,
         "base_url": KIMI_BASE_URL,
         "model": KIMI_MODEL,
     },
-    "openai": {
-        "key": OPENAI_API_KEY,
-        "base_url": OPENAI_BASE_URL,
-        "model": OPENAI_MODEL,
-    },
     "grok": {
         "key": GROK_API_KEY,
         "base_url": GROK_BASE_URL,
         "model": GROK_MODEL,
+    },
+    "minimax": {
+        "key": MINIMAX_API_KEY,
+        "base_url": MINIMAX_BASE_URL,
+        "model": MINIMAX_MODEL,
+    },
+    "glm": {
+        "key": GLM_API_KEY,
+        "base_url": GLM_BASE_URL,
+        "model": GLM_MODEL,
+    },
+    "qwen": {
+        "key": QWEN_API_KEY,
+        "base_url": QWEN_BASE_URL,
+        "model": QWEN_MODEL,
+    },
+    "deepseek": {
+        "key": DEEPSEEK_API_KEY,
+        "base_url": DEEPSEEK_BASE_URL,
+        "model": DEEPSEEK_MODEL,
+    },
+    "openai": {
+        "key": OPENAI_API_KEY,
+        "base_url": OPENAI_BASE_URL,
+        "model": OPENAI_MODEL,
     },
     "perplexity": {
         "key": PERPLEXITY_API_KEY,
@@ -57,17 +82,23 @@ PROVIDER_CONFIG = {
     },
 }
 
+# OpenAI 兼容的 provider 列表
+_OPENAI_COMPATIBLE = ("kimi", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity")
+
 
 def _openai_compatible_chat(provider: str, messages: list, model: str = None, max_tokens: int = 8192, temperature: float = 0.6) -> str:
-    """OpenAI 兼容 API（Kimi、OpenAI、Grok、Perplexity）。"""
+    """OpenAI 兼容 API。"""
     cfg = PROVIDER_CONFIG.get(provider, PROVIDER_CONFIG["kimi"])
     key = cfg["key"]
     base_url = cfg.get("base_url")
-    default_model = cfg.get("model", "gpt-4o-mini")
+    default_model = cfg.get("model", "gpt-5.4")
     if not key:
         raise ValueError(f"请设置 {provider.upper()}_API_KEY 或在 .env 中配置")
     client = OpenAI(api_key=key, base_url=base_url, http_client=httpx.Client(timeout=HTTP_TIMEOUT))
     m = model or default_model
+    # kimi-k2.5 等模型仅允许 temperature=1
+    if provider == "kimi" and "k2" in m.lower():
+        temperature = 1.0
     resp = client.chat.completions.create(
         model=m,
         messages=messages,
@@ -156,14 +187,15 @@ def chat(
 ) -> str:
     """
     统一对话接口。provider 未指定时使用环境变量 LLM_PROVIDER（默认 kimi）。
-    支持: kimi, openai, grok, perplexity, claude, gemini
+    优先: kimi, gemini, grok
+    候选: minimax, glm, qwen, deepseek, openai, perplexity, claude
     """
     p = (provider or os.getenv("LLM_PROVIDER") or LLM_PROVIDER or "kimi").lower().strip()
     if p == "claude":
         return _claude_chat(messages, model, max_tokens, temperature)
     if p == "gemini":
         return _gemini_chat(messages, model, max_tokens, temperature)
-    if p in ("kimi", "openai", "grok", "perplexity"):
+    if p in _OPENAI_COMPATIBLE:
         return _openai_compatible_chat(p, messages, model, max_tokens, temperature)
     # 默认按 kimi 处理
     return _openai_compatible_chat("kimi", messages, model, max_tokens, temperature)
@@ -240,7 +272,9 @@ def chat_vision(
         from config import KIMI_VISION_MODEL
         model = model or KIMI_VISION_MODEL
         return _openai_compatible_chat("kimi", messages, model, max_tokens, temperature)
-    if p in ("openai", "grok", "perplexity"):
+    if p in ("openai", "grok", "perplexity", "glm", "minimax", "qwen", "deepseek"):
+        if p == "glm":
+            model = model or GLM_VISION_MODEL
         return _openai_compatible_chat(p, messages, model, max_tokens, temperature)
     if p == "claude":
         return _claude_chat(messages, model, max_tokens, temperature)

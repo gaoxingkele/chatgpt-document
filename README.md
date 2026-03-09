@@ -56,6 +56,8 @@ all：全流程一条龙
 | Step4 | report-v2 | 报告1.0 + 专家意见 + 原始语料 | `output/reports/{name}_report_v2.md`、`.docx` |
 | Step5 | report-final | 报告2.0 + 原始语料 | `output/reports/{name}_report_v3.md`、`.docx` |
 | Step6 | report-v4 | 报告3.0 | `output/reports/{name}_report_v4.md`、`.docx`（含 References 引用） |
+| Step7（可选） | report-policy | 原始语料 + 最新报告 | `output/reports/{name}_学术风格分析报告.md`、`.docx` |
+| Step8 | report-v5 | Step7 学术风格分析报告 | `output/reports/{name}_报告_v5.md`、`.docx`（Prompt RL 迭代压缩） |
 
 ### 二、本地文档语料合并（merge / batch）
 
@@ -139,13 +141,36 @@ python main.py batch ./my_corpus_dir -o 输出名 -r -s A -p gemini
 - **依赖**：需配置 `PERPLEXITY_API_KEY`（.env），Perplexity 模型默认 `sonar`
 - **输出**：`{name}_report_v4.md`、`{name}_report_v4.docx`
 
+#### Step7（可选）学术风格分析报告（report-policy）
+
+- **输入**：原始语料（如 `output/raw/gaojinsumei.txt`）+ 最新版报告（如 `output/reports/gaojinsumei_report_v4.docx`）
+- **处理**：采用 `output/skill/{policy}/Skill.md` 与 `summary.md` 进行风格化，输出学术风格分析报告
+- **依赖**：需配置 `GEMINI_API_KEY`（.env），调用 Gemini API
+- **输出**：`{name}_学术风格分析报告.md`、`{name}_学术风格分析报告.docx`
+
+```bash
+python main.py report-policy gaojinsumei.txt gaojinsumei_report_v4.docx -o gaojinsumei -p policy1
+```
+
+#### Step8 报告 5.0（report-v5）— Prompt RL 迭代压缩
+
+- **输入**：Step7 学术风格分析报告（.md 或 .docx）
+- **处理**：采用 Prompt RL 方式迭代压缩；每轮压缩≥10%，最多 4 轮，最终尺寸≥原始 50%；保留事实与分析逻辑，遵循 Skill 规范
+- **依赖**：`GEMINI_API_KEY`
+- **输出**：`{name}_报告_v5.md`、`.docx`
+
+```bash
+python main.py report-v5 gaojinsumei_学术风格分析报告.docx -o gaojinsumei -p policy1
+```
+
 ### 四、输出目录结构
 
 ```
 output/
 ├── raw/          # 原始语料
-├── reports/      # 报告 1.0 / 2.0 / 3.0 / 4.0（.md / .docx）
-└── experts/      # 专家意见
+├── reports/      # 报告 1.0 / 2.0 / 3.0 / 4.0 / 学术风格分析报告（.md / .docx）
+├── experts/      # 专家意见
+└── skill/        # Step7 风格化 Skill（如 policy1/Skill.md、summary.md）
 ```
 
 ---
@@ -206,6 +231,7 @@ python main.py report-v4 output/reports/xxx_report_v3.docx -o xxx
 | **merge** | 本地文档语料合并：读取目录下 Word/PDF/图片等，经 API 去重排序后合成为 output/raw/xxx.txt |
 | **batch** | 目录语料重整 + 全流程（1.0 → 专家 → 2.0 → 3.0），支持 `-p` 指定 API |
 | **report-v4** | 对报告 3.0 做事实核查与引用，调用 Perplexity 获取出处，生成 4.0（含 References） |
+| **report-policy** | Step7（可选）：根据原始语料与最新报告，采用 Skill/summary 风格化，输出学术风格分析报告（Gemini API） |
 | **all-v3** | fetch → report-v3（从原始语料直接生成 3.0，不走专家流程） |
 | **all-context** | 多轮 Kimi 会话（保持记忆）→ 1.0 → 专家 → 2.0 |
 | **install-browser** | 安装 Playwright Chromium（爬虫备用） |
