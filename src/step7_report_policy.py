@@ -9,7 +9,7 @@ from pathlib import Path
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import (
-    REPORT_DIR, SKILL_DIR,
+    REPORT_DIR,
     POLICY_CHAPTER_BODY_LIMIT, POLICY_RAW_PREVIEW_LIMIT,
     SKILL_TEXT_LIMIT, SUMMARY_TEXT_LIMIT, POLICY_RAW_TOTAL_LIMIT,
 )
@@ -21,22 +21,7 @@ from src.utils.parallel import parallel_map
 
 
 from src.utils.log import log as _log
-
-
-def _load_skill_and_summary(policy_name: str = "policy1") -> tuple[str, str]:
-    """加载 Skill.md 与 summary.md，返回 (skill_text, summary_text)。"""
-    policy_dir = Path(SKILL_DIR) / policy_name
-    skill_path = policy_dir / "Skill.md"
-    if not skill_path.exists():
-        skill_path = policy_dir / "SKILL.md"
-    summary_path = policy_dir / "summary.md"
-
-    skill_text = skill_path.read_text(encoding="utf-8", errors="replace") if skill_path.exists() else ""
-    summary_text = summary_path.read_text(encoding="utf-8", errors="replace") if summary_path.exists() else ""
-
-    if not skill_text and not summary_text:
-        raise FileNotFoundError(f"未找到 Skill.md 或 summary.md：{policy_dir}")
-    return skill_text, summary_text
+from src.utils.file_utils import load_skill_and_summary as _load_skill_and_summary
 
 
 def _process_single_chapter(

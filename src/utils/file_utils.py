@@ -13,6 +13,23 @@ def load_raw_content(raw_path: Path | None, max_chars: int = 130_000) -> str:
     return text
 
 
+def load_skill_and_summary(policy_name: str = "policy1") -> tuple[str, str]:
+    """加载 Skill.md 与 summary.md，返回 (skill_text, summary_text)。"""
+    from config import SKILL_DIR
+    policy_dir = Path(SKILL_DIR) / policy_name
+    skill_path = policy_dir / "Skill.md"
+    if not skill_path.exists():
+        skill_path = policy_dir / "SKILL.md"
+    summary_path = policy_dir / "summary.md"
+
+    skill_text = skill_path.read_text(encoding="utf-8", errors="replace") if skill_path.exists() else ""
+    summary_text = summary_path.read_text(encoding="utf-8", errors="replace") if summary_path.exists() else ""
+
+    if not skill_text and not summary_text:
+        raise FileNotFoundError(f"未找到 Skill.md 或 summary.md：{policy_dir}")
+    return skill_text, summary_text
+
+
 def clean_json(text: str) -> str:
     """去除 LLM 回复中常见的 ```json ... ``` 代码块包裹。"""
     s = text.strip()

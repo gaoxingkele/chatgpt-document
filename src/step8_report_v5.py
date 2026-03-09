@@ -15,7 +15,7 @@ from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.utils.markdown_utils import read_report_text as _read_report_text
 from src.utils.docx_utils import md_to_docx
-from src.step7_report_policy import _load_skill_and_summary
+from src.utils.file_utils import load_skill_and_summary as _load_skill_and_summary
 
 
 from src.utils.log import log as _log
