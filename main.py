@@ -217,6 +217,24 @@ def cmd_report_policy(args):
     )
 
 
+def cmd_quality_eval(args):
+    """质量评估：对报告进行多维度质量打分。"""
+    from src.utils.quality_eval import evaluate_report_quality
+    from src.utils.markdown_utils import read_report_text
+    from src.utils.file_utils import load_raw_content
+    report_path = _resolve_path(args.report, REPORT_DIR)
+    report_text = read_report_text(report_path)
+    raw_text = load_raw_content(_resolve_path(args.raw_file, RAW_DIR)) if getattr(args, "raw_file", None) else ""
+    base = args.output_base or report_path.stem
+    output_path = REPORT_DIR / f"{base}_quality_eval.json"
+    result = evaluate_report_quality(report_text, raw_text, base, output_path)
+    print(f"\n质量评估结果:")
+    for k, v in result.items():
+        if k != "commentary":
+            print(f"  {k}: {v}")
+    print(f"  评语: {result.get('commentary', '')}")
+
+
 def cmd_consistency_check(args):
     """全文一致性校验：检查跨章节重复、矛盾、缺失过渡、篇幅失衡。"""
     from src.step4b_consistency_check import run_consistency_check
@@ -453,6 +471,13 @@ def main():
     p6.add_argument("report_v3", help="报告 3.0 路径，如 output/reports/xxx_report_v3.md")
     p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     p6.set_defaults(func=cmd_report_v4)
+
+    pqe = sub.add_parser("quality-eval", help="质量评估：对报告进行多维度质量打分")
+    subparsers_map["quality-eval"] = pqe
+    pqe.add_argument("report", help="报告路径，如 output/reports/xxx_report_v3.md")
+    pqe.add_argument("-r", "--raw-file", default=None, help="原始语料路径（可选，用于评估覆盖度）")
+    pqe.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    pqe.set_defaults(func=cmd_quality_eval)
 
     pcc = sub.add_parser("consistency-check", help="全文一致性校验：检查跨章节重复、矛盾、缺失过渡、篇幅失衡")
     subparsers_map["consistency-check"] = pcc
