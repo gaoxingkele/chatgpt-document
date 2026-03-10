@@ -4,13 +4,13 @@ from pathlib import Path
 
 
 def load_raw_content(raw_path: Path | None, max_chars: int = 130_000) -> str:
-    """加载文本文件并按 max_chars 截断。raw_path 为 None 或不存在时返回空串。"""
-    if not raw_path or not Path(raw_path).is_file():
-        return ""
-    text = Path(raw_path).read_text(encoding="utf-8", errors="replace")
-    if len(text) > max_chars:
-        text = text[:max_chars] + f"\n\n[内容已截断，仅保留前 {max_chars} 字]"
-    return text
+    """
+    加载语料并按 max_chars 截断。
+    支持 .txt 文件和语料包目录（含 corpus.md + assets/）。
+    raw_path 为 None 或不存在时返回空串。
+    """
+    from src.corpus_package import load_corpus_content
+    return load_corpus_content(raw_path, max_chars)
 
 
 def load_skill_and_summary(policy_name: str = "policy1") -> tuple[str, str]:
