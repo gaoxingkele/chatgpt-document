@@ -217,6 +217,20 @@ def cmd_report_policy(args):
     )
 
 
+def cmd_export(args):
+    """多格式导出：将报告导出为 md/docx/html/pdf。"""
+    from src.utils.export import export_report
+    from src.utils.markdown_utils import read_report_text
+    report_path = _resolve_path(args.report, REPORT_DIR)
+    md_text = read_report_text(report_path)
+    base = args.output_base or report_path.stem
+    base_path = REPORT_DIR / base
+    formats = args.format.split(",") if "," in args.format else [args.format]
+    results = export_report(md_text, base_path, formats)
+    for fmt, path in results.items():
+        print(f"  {fmt}: {path}")
+
+
 def cmd_quality_eval(args):
     """质量评估：对报告进行多维度质量打分。"""
     from src.utils.quality_eval import evaluate_report_quality
@@ -472,6 +486,13 @@ def main():
     p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     p6.add_argument("--skip-citation-verify", action="store_true", help="跳过引用 URL 可达性验证")
     p6.set_defaults(func=cmd_report_v4)
+
+    pex = sub.add_parser("export", help="多格式导出：将报告导出为 md/docx/html/pdf/all")
+    subparsers_map["export"] = pex
+    pex.add_argument("report", help="报告路径，如 output/reports/xxx_report_v3.md")
+    pex.add_argument("--format", default="html", help="导出格式: md,docx,html,pdf,all（逗号分隔多个）")
+    pex.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    pex.set_defaults(func=cmd_export)
 
     pqe = sub.add_parser("quality-eval", help="质量评估：对报告进行多维度质量打分")
     subparsers_map["quality-eval"] = pqe
