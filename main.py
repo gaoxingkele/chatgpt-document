@@ -217,6 +217,17 @@ def cmd_report_policy(args):
     )
 
 
+def cmd_drift_check(args):
+    """语义漂移检测：比较两个版本的报告，检测核心论点变化。"""
+    from src.utils.semantic_drift import run_drift_check
+    baseline = _resolve_path(args.baseline, REPORT_DIR)
+    current = _resolve_path(args.current, REPORT_DIR)
+    result = run_drift_check(baseline, current, args.output_base)
+    score = result.get("drift_score", -1)
+    print(f"\n语义漂移分数: {score}")
+    print(f"  摘要: {result.get('summary', '')}")
+
+
 def cmd_export(args):
     """多格式导出：将报告导出为 md/docx/html/pdf。"""
     from src.utils.export import export_report
@@ -486,6 +497,13 @@ def main():
     p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     p6.add_argument("--skip-citation-verify", action="store_true", help="跳过引用 URL 可达性验证")
     p6.set_defaults(func=cmd_report_v4)
+
+    pdc = sub.add_parser("drift-check", help="语义漂移检测：比较两个版本的报告核心论点变化")
+    subparsers_map["drift-check"] = pdc
+    pdc.add_argument("baseline", help="基线报告路径（如报告 v1）")
+    pdc.add_argument("current", help="当前报告路径（如报告 v3）")
+    pdc.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    pdc.set_defaults(func=cmd_drift_check)
 
     pex = sub.add_parser("export", help="多格式导出：将报告导出为 md/docx/html/pdf/all")
     subparsers_map["export"] = pex
