@@ -65,7 +65,7 @@ def _api_revise_chapter(
     raw_section = ""
     if raw_chunk:
         raw_section = f"""
-【原始语料】（供参考，优先保留论证、案例、数据）
+【原始语料】（供参考，优先保留论证、案例、数据、公式）
 ---
 {raw_chunk[:REVISE_RAW_CHUNK_LIMIT]}
 ---
@@ -98,7 +98,7 @@ def _api_revise_chapter(
     prompt += f"""
 【极其重要的篇幅要求（必须遵守）】
 - 本章输出字数**不少于 {target_chars} 字**。禁止压缩、禁止将多段合并成一句或要点罗列。
-- 重写、去重、理顺逻辑，但**不要删减论证、案例、表格、数据**。
+- 重写、去重、理顺逻辑，但**不要删减论证、案例、表格、数据、公式**。数学公式（`$...$` / `$$...$$`）须原样保留。
 - 直接输出本章完整正文，以 `## {chapter_title}` 开头，使用 Markdown（### 等）。不要 JSON 或多余说明。"""
 
     resp = chat(

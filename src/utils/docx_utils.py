@@ -2,7 +2,8 @@
 """Markdown → Word 转换工具（增强版）。
 
 支持：标题、段落、加粗、斜体、超链接、引用块、嵌套列表、
-水平线、代码块、图片、表格列对齐、目录、页眉页脚、封面页、脚注。
+水平线、代码块、图片、表格列对齐、目录、页眉页脚、封面页、脚注、
+数学公式（$inline$ 和 $$display$$）。
 """
 import re
 from pathlib import Path
@@ -12,6 +13,70 @@ from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import nsdecls
 from docx.oxml import parse_xml
+
+
+# --------------- 数学公式 ---------------
+
+def _add_inline_math(paragraph, latex: str):
+    """在段落中插入行内数学公式（OMML 格式）。"""
+    try:
+        from src.utils.omml_converter import latex_to_omml
+        from lxml import etree
+        omath = latex_to_omml(latex)
+        # 设置 OMML 命名空间声明
+        OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+        omath_str = etree.tostring(omath, encoding="unicode")
+        # 添加命名空间前缀
+        if f'xmlns:m="{OMML_NS}"' not in omath_str:
+            omath_str = omath_str.replace(
+                f"{{{OMML_NS}}}",
+                "m:",
+            )
+            omath_str = omath_str.replace(
+                "<m:oMath",
+                f'<m:oMath xmlns:m="{OMML_NS}"',
+                1,
+            )
+        omath_el = parse_xml(omath_str)
+        paragraph._element.append(omath_el)
+    except Exception:
+        # 回退：作为斜体文本
+        r = paragraph.add_run(latex)
+        r.italic = True
+        r.font.size = Pt(12)
+
+
+def _add_display_math(doc, latex: str):
+    """添加块级数学公式（独立居中段落）。"""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    _add_inline_math(p, latex)
+
+
+def _is_display_math_block(lines: list, i: int) -> tuple:
+    """
+    检测 $$ ... $$ 块级公式。
+    返回 (latex_content, end_line_index) 或 (None, i)。
+    """
+    stripped = lines[i].strip()
+    # 单行 $$ ... $$
+    m = re.match(r'^\$\$(.+)\$\$$', stripped)
+    if m:
+        return m.group(1).strip(), i + 1
+
+    # 多行 $$ 开始
+    if stripped == "$$":
+        j = i + 1
+        parts = []
+        while j < len(lines):
+            if lines[j].strip() == "$$":
+                return "\n".join(parts).strip(), j + 1
+            parts.append(lines[j])
+            j += 1
+        # 未闭合的 $$：作为文本
+        return None, i
+
+    return None, i
 
 
 # --------------- 内联格式解析 ---------------
@@ -34,33 +99,49 @@ def _xml_escape(text: str) -> str:
 
 
 def _add_runs_with_formatting(paragraph, text: str, font_size, font_name: str = "宋体") -> None:
-    """解析文本中的 **加粗**、*斜体*、[链接](url)，并添加到段落。"""
-    # 先处理链接 → 加粗 → 斜体
+    """解析文本中的 $公式$、**加粗**、*斜体*、[链接](url)，并添加到段落。"""
+    # 先拆分行内公式 $...$ （不匹配 $$），再处理其他格式
+    # 注意：不贪婪匹配，且 $ 不能紧跟 $ 或前接 $
+    math_pattern = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+    parts = []
+    last = 0
+    for m in math_pattern.finditer(text):
+        if m.start() > last:
+            parts.append(("text", text[last:m.start()]))
+        parts.append(("math", m.group(1)))
+        last = m.end()
+    if last < len(text):
+        parts.append(("text", text[last:]))
+
+    for ptype, pval in parts:
+        if ptype == "math":
+            _add_inline_math(paragraph, pval)
+        else:
+            _add_formatted_text_segment(paragraph, pval, font_size, font_name)
+
+
+def _add_formatted_text_segment(paragraph, text: str, font_size, font_name: str = "宋体") -> None:
+    """解析文本片段中的 **加粗**、*斜体*、[链接](url)。"""
     pattern = re.compile(r'(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*)')
     pos = 0
     for m in pattern.finditer(text):
-        # 添加匹配前的普通文本
         if m.start() > pos:
             r = paragraph.add_run(text[pos:m.start()])
             r.font.size = font_size
             r.font.name = font_name
         if m.group(2) and m.group(3):
-            # 超链接 [text](url)
             _add_hyperlink(paragraph, m.group(3), m.group(2))
         elif m.group(4):
-            # 加粗 **text**
             r = paragraph.add_run(m.group(4))
             r.bold = True
             r.font.size = font_size
             r.font.name = font_name
         elif m.group(5):
-            # 斜体 *text*
             r = paragraph.add_run(m.group(5))
             r.italic = True
             r.font.size = font_size
             r.font.name = font_name
         pos = m.end()
-    # 剩余文本
     if pos < len(text):
         r = paragraph.add_run(text[pos:])
         r.font.size = font_size
@@ -380,6 +461,14 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             p.runs[0].font.name = heading_font
             i += 1
             continue
+
+        # 块级数学公式 $$ ... $$
+        if stripped.startswith("$$"):
+            latex, next_i = _is_display_math_block(lines, i)
+            if latex is not None:
+                _add_display_math(doc, latex)
+                i = next_i
+                continue
 
         # 代码块 ```
         if stripped.startswith("```"):
