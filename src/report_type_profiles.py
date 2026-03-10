@@ -11,6 +11,9 @@ DEFAULT_REPORT_TYPE = "academic_research"
 REPORT_TYPES_DIR = Path(SKILL_DIR) / "report_types"
 STATIC_REPORT_TYPES = [
     "academic_research",
+    "research_plan",
+    "paper_outline",
+    "experiment_plan",
     "political_commentary",
     "business_analysis",
     "feasibility_study",
