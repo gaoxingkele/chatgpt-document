@@ -130,6 +130,11 @@ def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_t
     from src.step5_report_final import run_report_final
     run_report_final(report_v2_path, base, style, raw_path)
 
+    _log_step("Step4b 全文一致性校验")
+    report_v3_path = _find_report(base, "report_v3")
+    from src.step4b_consistency_check import run_consistency_check
+    run_consistency_check(report_v3_path, raw_path, base)
+
 
 def cmd_batch(args):
     """Step0 语料重整 + 全流程：读取目录语料 → 去重排序 → 1.0 → 专家 → 2.0 → 3.0"""
@@ -210,6 +215,14 @@ def cmd_report_policy(args):
         getattr(args, "policy", "policy1"),
         getattr(args, "report_type", None),
     )
+
+
+def cmd_consistency_check(args):
+    """全文一致性校验：检查跨章节重复、矛盾、缺失过渡、篇幅失衡。"""
+    from src.step4b_consistency_check import run_consistency_check
+    report_path = _resolve_path(args.report, REPORT_DIR)
+    raw_path = _resolve_path(args.raw_file, RAW_DIR) if getattr(args, "raw_file", None) else None
+    run_consistency_check(report_path, raw_path, args.output_base)
 
 
 def cmd_report_final(args):
@@ -417,6 +430,13 @@ def main():
     p6.add_argument("report_v3", help="报告 3.0 路径，如 output/reports/xxx_report_v3.md")
     p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     p6.set_defaults(func=cmd_report_v4)
+
+    pcc = sub.add_parser("consistency-check", help="全文一致性校验：检查跨章节重复、矛盾、缺失过渡、篇幅失衡")
+    subparsers_map["consistency-check"] = pcc
+    pcc.add_argument("report", help="报告路径，如 output/reports/xxx_report_v3.md")
+    pcc.add_argument("-r", "--raw-file", default=None, help="原始语料路径（可选，用于交叉比对）")
+    pcc.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    pcc.set_defaults(func=cmd_consistency_check)
 
     p7 = sub.add_parser("report-policy", help="Step7: 采用 policy 风格化重写，输出类型化报告")
     subparsers_map["report-policy"] = p7

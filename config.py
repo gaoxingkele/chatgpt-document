@@ -124,6 +124,10 @@ COMPRESS_SKILL_TEXT_LIMIT = 12_000     # 压缩时 Skill.md 截取
 COMPRESS_SUMMARY_TEXT_LIMIT = 8_000    # 压缩时 summary.md 截取
 COMPRESS_DOC_LIMIT = 60_000            # 压缩时文档截取
 
+# Step4b 一致性校验
+CONSISTENCY_REPORT_LIMIT = 80_000      # 一致性校验报告截取
+CONSISTENCY_RAW_LIMIT = 30_000         # 一致性校验原始语料截取
+
 # ============ 支持的文件扩展名 ============
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}
 DOCUMENT_EXTENSIONS = {".docx", ".pdf"}
