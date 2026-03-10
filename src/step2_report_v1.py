@@ -19,7 +19,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import (
     REPORT_DIR,
-    OUTLINE_RAW_LIMIT, CHAPTER_INTRO_BODY_LIMIT,
+    OUTLINE_RAW_LIMIT, OUTLINE_REVIEW_RAW_LIMIT, CHAPTER_INTRO_BODY_LIMIT,
     SUPPLEMENT_RAW_LIMIT, SUPPLEMENT_REPORT_LIMIT, DEDUP_REPORT_LIMIT,
     ASSEMBLE_CHUNK_SIZE,
 )
@@ -117,6 +117,54 @@ def _api_build_outline(content: str) -> dict:
             {"level1": "四、结论与建议", "level2": [{"title": "4.1 结论", "level3": []}]},
         ]
     return meta
+
+
+def _api_review_outline(outline_json: dict, content: str) -> dict:
+    """重新审阅大纲，检查覆盖度、独立性、逻辑递进、均衡性，返回修正后的大纲 JSON。"""
+    outline_str = json.dumps(outline_json, ensure_ascii=False, indent=2)
+    prompt = f"""请审阅以下文档大纲 JSON，结合原始语料，从四个维度进行优化：
+
+1. **覆盖度**：大纲是否涵盖了语料中的所有核心主题？有无遗漏的重要话题？
+2. **独立性**：各章节之间是否存在内容重叠？是否需要合并或拆分？
+3. **逻辑递进**：章节顺序是否合理？是否遵循由浅入深、从背景到结论的逻辑？
+4. **均衡性**：各章节的二级目录数量是否均衡？是否有章节过于庞杂或过于单薄？
+
+【当前大纲 JSON】
+{outline_str}
+
+【原始语料】
+---
+{content[:OUTLINE_REVIEW_RAW_LIMIT]}
+---
+
+【输出要求】
+- 直接输出**修正后的完整大纲 JSON**，格式与输入相同（含 title、summary、keywords、outline）
+- 若大纲已经合理，可仅做微调或原样返回
+- 不要输出分析说明，只输出 JSON
+- 不要 markdown 代码块包裹"""
+
+    _log("调用 API：审阅并优化大纲...", "1b")
+    t0 = time.time()
+    resp = chat(
+        [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+        max_tokens=8192,
+        temperature=0.3,
+    )
+    _log(f"API#1b 大纲审阅完成，耗时 {time.time()-t0:.1f}s", "1b")
+    text = _clean_json(resp)
+    try:
+        reviewed = json.loads(text)
+        # 确保关键字段存在
+        if "outline" in reviewed and isinstance(reviewed["outline"], list):
+            # 保留原始 title/summary/keywords 如果审阅版缺失
+            for key in ("title", "summary", "keywords"):
+                if key not in reviewed and key in outline_json:
+                    reviewed[key] = outline_json[key]
+            return reviewed
+    except (json.JSONDecodeError, Exception):
+        pass
+    _log("[警告] 大纲审阅结果解析失败，保留原始大纲")
+    return outline_json
 
 
 def _api_assemble_section(
@@ -358,6 +406,7 @@ def run_meta_and_report_v1(raw_path: Path, output_basename: str = None) -> dict:
     _log(f"原始语料: {raw_path.name}, 共 {len(content)} 字")
     _log("=" * 60)
     meta = _api_build_outline(content)
+    meta = _api_review_outline(meta, content)
     outline = meta.get("outline", [])
     if not outline:
         outline = [{"level1": "一、概述", "level2": [{"title": "1.1 主要内容", "level3": []}]}]

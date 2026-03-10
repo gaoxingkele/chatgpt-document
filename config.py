@@ -128,6 +128,9 @@ COMPRESS_DOC_LIMIT = 60_000            # 压缩时文档截取
 CONSISTENCY_REPORT_LIMIT = 80_000      # 一致性校验报告截取
 CONSISTENCY_RAW_LIMIT = 30_000         # 一致性校验原始语料截取
 
+# Step2 大纲审阅
+OUTLINE_REVIEW_RAW_LIMIT = 60_000      # 大纲审阅时语料截取
+
 # ============ 支持的文件扩展名 ============
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}
 DOCUMENT_EXTENSIONS = {".docx", ".pdf"}
