@@ -8,6 +8,8 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
+import json as _json
+
 from config import (
     REPORT_DIR, EXPERT_DIR, RAW_DIR,
     HALLUCINATION_TEXT_LIMIT,
@@ -132,12 +134,32 @@ def run_report_v2_and_docx(
 
     header, chapters = _parse_report_v1_chapters(report_v1_text)
     num_chapters = len(chapters)
-    target_per_chapter = max(2000, target_min_chars // num_chapters) if num_chapters else target_min_chars
+
+    # 加载 density 权重（从 meta.json）
+    densities = []
+    meta_path = REPORT_DIR / f"{base}_meta.json"
+    if meta_path.is_file():
+        try:
+            meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+            for ch in meta.get("outline", []):
+                densities.append(ch.get("density", 3))
+        except Exception:
+            pass
+    # 补齐或截断到章节数
+    while len(densities) < num_chapters:
+        densities.append(3)
+    densities = densities[:num_chapters]
+
+    avg_density = sum(densities) / len(densities) if densities else 3
+    chapter_targets = []
+    for i in range(num_chapters):
+        t = max(2000, int(target_min_chars * (densities[i] / avg_density) / num_chapters))
+        chapter_targets.append(t)
 
     _log("=" * 60)
     _log("Step4 报告 2.0：开始（分章整改模式）")
     _log(f"报告 1.0: 约 {len(report_v1_text)} 字 | 原始语料: 约 {raw_full_len} 字 | 字数目标: ≥{target_min_chars} 字")
-    _log(f"章节数: {num_chapters} | 每章目标: ≥{target_per_chapter} 字")
+    _log(f"章节数: {num_chapters} | 密度权重: {densities} | 加权目标: {chapter_targets}")
     _log("=" * 60)
     t0 = time.time()
 
@@ -145,7 +167,7 @@ def run_report_v2_and_docx(
 
     def _revise_one(idx, chapter):
         ch_title, ch_body = chapter
-        _log(f"[并行] 整改第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}...")
+        _log(f"[并行] 整改第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}... (目标 ≥{chapter_targets[idx]} 字)")
         start_pos = idx * raw_len // num_chapters if raw_len else 0
         end_pos = (idx + 1) * raw_len // num_chapters if raw_len else raw_len
         raw_chunk = raw_text[start_pos:end_pos] if raw_text else ""
@@ -155,7 +177,7 @@ def run_report_v2_and_docx(
             expert_text,
             hallucination_text,
             raw_chunk,
-            target_per_chapter,
+            chapter_targets[idx],
             idx + 1,
             num_chapters,
         )
