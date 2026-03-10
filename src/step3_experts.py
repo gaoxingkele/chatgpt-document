@@ -13,7 +13,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import EXPERT_DIR, EXPERT_PREVIEW_LIMIT
+from config import EXPERT_DIR, EXPERT_PREVIEW_LIMIT, ARBITRATE_EXPERT_LIMIT
 from src.llm_client import chat
 from src.llm_client import perplexity_chat_with_citations
 from src.report_type_profiles import load_report_type_profile
@@ -155,6 +155,62 @@ def _call_expert(name: str, system: str, user_msg: str, expert_idx: int) -> tupl
         return name, "", str(e)
 
 
+def _arbitrate_experts(combined_text: str, base: str) -> str:
+    """对 5 位专家的汇总意见进行冲突仲裁，按优先级排序并裁定采纳/搁置/折中。"""
+    prompt = f"""请对以下 5 位专家的评审意见进行**冲突仲裁**。
+
+【优先级规则】
+- 事实类意见（专家1 事实与逻辑、专家4 事实核查）优先级最高
+- 结构类意见（专家2 结构与深度、专家3 可行性与合规）优先级次之
+- 风格类意见（专家5 文笔风格）优先级最低
+- 当不同专家意见冲突时，高优先级意见优先采纳
+
+【任务】
+1. 识别各专家意见中的**冲突点**（同一处内容收到相互矛盾的修改建议）
+2. 对每个冲突点，按优先级给出裁定：**采纳**（接受某方）/ **搁置**（暂不修改）/ **折中**（综合处理）
+3. 对无冲突的高价值意见，标记为**采纳**
+4. 输出结构化的仲裁结果
+
+【专家意见汇总】
+---
+{combined_text[:ARBITRATE_EXPERT_LIMIT]}
+---
+
+请输出仲裁结果，格式如下：
+
+# 专家意见仲裁报告
+
+## 冲突裁定
+（列出冲突点及裁定）
+
+## 采纳清单
+（按优先级列出应采纳的修改意见）
+
+## 搁置清单
+（列出暂不采纳的意见及理由）
+
+直接输出 Markdown，不要 JSON。"""
+
+    _log("调用 API：专家意见冲突仲裁...", "arbitrate")
+    t0 = time.time()
+    resp = chat(
+        [
+            {"role": "system", "content": "你是中立的学术仲裁专家，擅长调和多方评审意见冲突，输出结构化裁定。"},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=8192,
+        temperature=0.3,
+    )
+    _log(f"仲裁完成，耗时 {time.time()-t0:.1f}s", "arbitrate")
+
+    # 保存仲裁结果
+    arbitrate_path = EXPERT_DIR / f"{base}_专家意见仲裁.md"
+    arbitrate_path.write_text(resp.strip(), encoding="utf-8")
+    _log(f"已保存: {arbitrate_path.name}")
+
+    return resp.strip()
+
+
 def run_experts(
     report_v1_path: Path,
     output_basename: str = None,
@@ -227,7 +283,14 @@ def run_experts(
     combined_path = EXPERT_DIR / f"{base}_专家意见汇总.md"
     combined_path.write_text(combined, encoding="utf-8")
     results["_combined_path"] = str(combined_path)
-    _log(f"Step3 完成：专家意见汇总已保存 {combined_path.name}")
+    _log(f"专家意见汇总已保存 {combined_path.name}")
+
+    # 专家意见冲突仲裁
+    _log("Step3 进入专家意见冲突仲裁...")
+    _arbitrate_experts(combined, base)
+    results["_arbitrate_path"] = str(EXPERT_DIR / f"{base}_专家意见仲裁.md")
+
+    _log(f"Step3 完成：专家意见汇总与仲裁已保存")
     return results
 
 

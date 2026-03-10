@@ -21,6 +21,10 @@ from src.utils.parallel import parallel_map
 
 
 def _load_expert_combined(base: str) -> str:
+    # 优先加载仲裁版本
+    arbitrate = EXPERT_DIR / f"{base}_专家意见仲裁.md"
+    if arbitrate.is_file():
+        return arbitrate.read_text(encoding="utf-8", errors="replace")
     p = EXPERT_DIR / f"{base}_专家意见汇总.md"
     if not p.is_file():
         raise FileNotFoundError(f"专家意见汇总不存在: {p}，请先运行 Step3")

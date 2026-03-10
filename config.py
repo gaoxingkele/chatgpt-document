@@ -131,6 +131,9 @@ CONSISTENCY_RAW_LIMIT = 30_000         # 一致性校验原始语料截取
 # Step2 大纲审阅
 OUTLINE_REVIEW_RAW_LIMIT = 60_000      # 大纲审阅时语料截取
 
+# Step3 专家意见仲裁
+ARBITRATE_EXPERT_LIMIT = 50_000        # 仲裁时专家意见截取
+
 # ============ 支持的文件扩展名 ============
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}
 DOCUMENT_EXTENSIONS = {".docx", ".pdf"}
