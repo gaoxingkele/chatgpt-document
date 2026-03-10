@@ -68,7 +68,9 @@ def extract_from_docx_rich(file_path: Path) -> ExtractionResult:
         "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
         "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
         "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+        "m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
     }
+    OMML_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
     # 收集所有图片关系 (rId → image blob + content_type)
     image_rels = {}
@@ -134,6 +136,28 @@ def extract_from_docx_rich(file_path: Path) -> ExtractionResult:
                         filename = f"img_{img_counter:03d}{ext}"
                         images.append({"data": blob, "filename": filename})
                         para_parts.append(f"![image](assets/{filename})")
+
+            elif tag == "oMath":
+                # 行内公式
+                try:
+                    from src.utils.omml_converter import omml_to_latex
+                    latex = omml_to_latex(child)
+                    if latex:
+                        para_parts.append(f"${latex}$")
+                except Exception:
+                    pass
+
+            elif tag == "oMathPara":
+                # 块级公式
+                try:
+                    from src.utils.omml_converter import omml_to_latex
+                    omath = child.find(f"{{{OMML_NS}}}oMath")
+                    if omath is not None:
+                        latex = omml_to_latex(omath)
+                        if latex:
+                            para_parts.append(f"\n$$\n{latex}\n$$\n")
+                except Exception:
+                    pass
 
         text = "".join(para_parts).strip()
         if text:
