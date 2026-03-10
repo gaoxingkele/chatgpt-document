@@ -268,6 +268,11 @@ def cmd_full_report(args):
     base = args.output_base or (input_path.name if input_path.is_dir() else input_path.stem)
     report_type = getattr(args, "report_type", None)
     policy = getattr(args, "policy", "policy1")
+    no_resume = getattr(args, "no_resume", False)
+
+    from src.utils.progress import load_progress, save_progress, should_skip_step
+
+    progress = {} if no_resume else load_progress(base, REPORT_DIR)
 
     if input_path.is_dir():
         from src.step0_corpus_merge import run_corpus_merge
@@ -291,27 +296,45 @@ def cmd_full_report(args):
     else:
         raise FileNotFoundError(f"输入不存在: {input_path}")
 
-    # Step2~Step5: 共享 pipeline
-    _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type)
+    # Step2~Step5: 共享 pipeline（带断点续跑）
+    if should_skip_step(progress, "standard_pipeline"):
+        _log_step("跳过 Step2~Step5（已完成）")
+    else:
+        _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type)
+        save_progress(base, REPORT_DIR, "standard_pipeline")
 
-    # Step6~Step8: 扩展流程
-    report_v3_path = _find_report(base, "report_v3")
-    from src.step6_report_v4 import run_report_v4
-    run_report_v4(report_v3_path, base)
+    # Step6: 报告 4.0
+    if should_skip_step(progress, "step6"):
+        _log_step("跳过 Step6（已完成）")
+    else:
+        report_v3_path = _find_report(base, "report_v3")
+        from src.step6_report_v4 import run_report_v4
+        run_report_v4(report_v3_path, base)
+        save_progress(base, REPORT_DIR, "step6")
 
-    report_v4_path = _find_report(base, "report_v4", ext=".docx")
-    if not report_v4_path.is_file():
-        report_v4_path = _find_report(base, "report_v4")
-    from src.step7_report_policy import run_report_policy
-    run_report_policy(raw_path, report_v4_path, base, policy, report_type)
+    # Step7: 学术风格分析
+    if should_skip_step(progress, "step7"):
+        _log_step("跳过 Step7（已完成）")
+    else:
+        report_v4_path = _find_report(base, "report_v4", ext=".docx")
+        if not report_v4_path.is_file():
+            report_v4_path = _find_report(base, "report_v4")
+        from src.step7_report_policy import run_report_policy
+        run_report_policy(raw_path, report_v4_path, base, policy, report_type)
+        save_progress(base, REPORT_DIR, "step7")
 
-    profile = load_report_type_profile(report_type)
-    step7_suffix = profile.get("step7_title_suffix", "学术风格分析报告")
-    policy_report = _find_report(base, step7_suffix, ext=".docx")
-    if not policy_report.is_file():
-        policy_report = _find_report(base, step7_suffix)
-    from src.step8_report_v5 import run_report_v5
-    run_report_v5(policy_report, base, policy, report_type)
+    # Step8: 压缩
+    if should_skip_step(progress, "step8"):
+        _log_step("跳过 Step8（已完成）")
+    else:
+        profile = load_report_type_profile(report_type)
+        step7_suffix = profile.get("step7_title_suffix", "学术风格分析报告")
+        policy_report = _find_report(base, step7_suffix, ext=".docx")
+        if not policy_report.is_file():
+            policy_report = _find_report(base, step7_suffix)
+        from src.step8_report_v5 import run_report_v5
+        run_report_v5(policy_report, base, policy, report_type)
+        save_progress(base, REPORT_DIR, "step8")
 
     _log_banner("Step1~Step8 完成，1.0~5.0 已输出至 output/reports")
 
@@ -485,6 +508,7 @@ def main():
     pfr.add_argument("--policy", default="policy1", help="Step7/Step8 使用的 skill 子目录")
     _add_report_type_arg(pfr)
     pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    pfr.add_argument("--no-resume", action="store_true", help="禁用断点续跑，强制从头执行")
     pfr.set_defaults(func=cmd_full_report)
 
     args = parser.parse_args()
