@@ -273,7 +273,7 @@ def run_experts(
     _log(f"Step3 全部专家评审完成，总耗时 {time.time()-t_start:.1f}s")
 
     # 合并为一份「专家意见汇总」（按固定顺序）
-    combined = f"# 深度调查报告 1.0 — 专家评审意见汇总\n\n"
+    combined = "# 深度调查报告 1.0 — 专家评审意见汇总\n\n"
     for name in prompts.keys():
         data = results.get(name)
         if data:
@@ -290,7 +290,7 @@ def run_experts(
     _arbitrate_experts(combined, base)
     results["_arbitrate_path"] = str(EXPERT_DIR / f"{base}_专家意见仲裁.md")
 
-    _log(f"Step3 完成：专家意见汇总与仲裁已保存")
+    _log("Step3 完成：专家意见汇总与仲裁已保存")
     return results
 
 

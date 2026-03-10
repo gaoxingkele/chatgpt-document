@@ -117,7 +117,7 @@ def run_consistency_check(
     )
 
     # 保存可读 Markdown
-    md_lines = [f"# 全文一致性校验报告\n", f"共发现 {issues_count} 个问题\n"]
+    md_lines = ["# 全文一致性校验报告\n", f"共发现 {issues_count} 个问题\n"]
     if isinstance(issues, list):
         for i, item in enumerate(issues, 1):
             md_lines.append(f"## 问题 {i}")
