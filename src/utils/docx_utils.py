@@ -296,15 +296,31 @@ def _is_horizontal_rule(stripped: str) -> bool:
 
 # --------------- 主转换函数 ---------------
 
+def _get_fonts():
+    """根据报告语言返回字体配置。"""
+    try:
+        from config import REPORT_LANGUAGE
+        lang = REPORT_LANGUAGE
+    except (ImportError, AttributeError):
+        lang = "zh"
+    if lang == "en":
+        return {"body": "Times New Roman", "heading": "Arial"}
+    return {"body": "宋体", "heading": "黑体"}
+
+
 def md_to_docx(md_text: str, docx_path: Path) -> None:
     """将 Markdown 转为 Word（增强版）。
 
     支持：标题层级、段落、加粗/斜体、超链接、引用块、嵌套列表、
     水平线、代码块、图片、表格列对齐、目录、页眉页脚、封面页。
     """
+    fonts = _get_fonts()
+    body_font = fonts["body"]
+    heading_font = fonts["heading"]
+
     doc = Document()
     doc.styles["Normal"].font.size = Pt(12)
-    doc.styles["Normal"].font.name = "宋体"
+    doc.styles["Normal"].font.name = body_font
 
     # 收集脚注定义
     footnote_defs = _collect_footnote_defs(md_text)
@@ -342,7 +358,7 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             p.style = "Heading 1"
             p.runs[0].bold = True
             p.runs[0].font.size = Pt(18)
-            p.runs[0].font.name = "黑体"
+            p.runs[0].font.name = heading_font
             i += 1
             continue
 
@@ -352,7 +368,7 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             p.style = "Heading 2"
             p.runs[0].bold = True
             p.runs[0].font.size = Pt(16)
-            p.runs[0].font.name = "黑体"
+            p.runs[0].font.name = heading_font
             i += 1
             continue
 
@@ -361,7 +377,7 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             p = doc.add_paragraph(stripped[4:].strip())
             p.runs[0].bold = True
             p.runs[0].font.size = Pt(14)
-            p.runs[0].font.name = "黑体"
+            p.runs[0].font.name = heading_font
             i += 1
             continue
 

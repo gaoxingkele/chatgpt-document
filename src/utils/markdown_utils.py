@@ -9,7 +9,7 @@ def parse_report_chapters(text: str) -> tuple[str, list[tuple[str, str]]]:
     解析报告：提取正文前的头部（标题、摘要、关键词），及章节列表 [(章标题, 章正文), ...]。
     章标题匹配 ## 一、 ## 二、 ... 或 ## 1. ## 2. ...
     """
-    pattern = re.compile(r"^##\s+[一二三四五六七八九十]+、.+$|^##\s+\d+\.\s+.+$", re.MULTILINE)
+    pattern = re.compile(r"^##\s+[一二三四五六七八九十]+、.+$|^##\s+\d+\.\s+.+$|^##\s+Chapter\s+\d+[.:].+$", re.MULTILINE)
     matches = list(pattern.finditer(text))
     if not matches:
         return text, []

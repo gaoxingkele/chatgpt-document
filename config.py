@@ -67,6 +67,9 @@ PERPLEXITY_MODEL = _env("PERPLEXITY_MODEL", "sonar")
 ANTHROPIC_API_KEY = _env("ANTHROPIC_API_KEY")
 ANTHROPIC_MODEL = _env("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
+# 报告语言
+REPORT_LANGUAGE = _env("REPORT_LANGUAGE", "zh")
+
 # 项目路径
 PROJECT_ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = PROJECT_ROOT / "output"

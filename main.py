@@ -99,6 +99,22 @@ def _apply_provider(provider: str):
         os.environ["LLM_PROVIDER"] = provider
 
 
+def _apply_lang(lang: str):
+    """命令行指定语言时覆盖配置。"""
+    if lang:
+        import config
+        config.REPORT_LANGUAGE = lang
+
+
+def _add_lang_arg(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--lang",
+        default=None,
+        choices=["zh", "en"],
+        help="报告语言（zh=中文, en=英文）",
+    )
+
+
 def _add_report_type_arg(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-t",
@@ -181,6 +197,7 @@ def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_t
 def cmd_batch(args):
     """Step0 语料重整 + 全流程：读取目录语料 → 去重排序 → 1.0 → 专家 → 2.0 → 3.0"""
     _apply_provider(getattr(args, "provider", None))
+    _apply_lang(getattr(args, "lang", None))
     from src.step0_corpus_merge import run_corpus_merge
     dir_path = Path(args.dir)
     if not dir_path.is_absolute():
@@ -198,6 +215,7 @@ def cmd_batch(args):
 
 
 def cmd_report_v1(args):
+    _apply_lang(getattr(args, "lang", None))
     from src.step2_report_v1 import run_meta_and_report_v1
     raw_path = _resolve_path(args.raw_file, RAW_DIR)
     run_meta_and_report_v1(raw_path, args.output_base)
@@ -330,6 +348,7 @@ def cmd_all_v3(args):
 def cmd_all(args):
     """全流程：抓取/导入 → 报告1.0 → 专家 → 报告2.0 → 报告3.0 最终版+Word"""
     _apply_provider(getattr(args, "provider", None))
+    _apply_lang(getattr(args, "lang", None))
     t_start = time.time()
     _log_banner("全流程开始")
     print(f"  输入: {args.input}", flush=True)
@@ -347,6 +366,7 @@ def cmd_all(args):
 def cmd_full_report(args):
     """全流程 Step0→Step8：语料目录/文件 → 1.0→专家→2.0→3.0→4.0→Step7 学术分析→5.0，使用 Gemini，输出各版本文件。"""
     _apply_provider(getattr(args, "provider", None))
+    _apply_lang(getattr(args, "lang", None))
     input_path = Path(args.input)
     if not input_path.is_absolute():
         input_path = PROJECT_ROOT / input_path
@@ -497,12 +517,14 @@ def main():
     p0b2.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0b2)
     _add_report_type_arg(p0b2)
+    _add_lang_arg(p0b2)
     p0b2.set_defaults(func=cmd_batch)
 
     p2 = sub.add_parser("report-v1", help="Step2: 生成标题/摘要/关键词与深度报告 1.0")
     subparsers_map["report-v1"] = p2
     p2.add_argument("raw_file", type=Path, help="原始文本，如 output/raw/xxx.txt")
     p2.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    _add_lang_arg(p2)
     p2.set_defaults(func=lambda a: cmd_report_v1(a) or None)
 
     p3 = sub.add_parser("experts", help="Step3: 三位专家评审，生成意见文档")
@@ -594,6 +616,7 @@ def main():
     p0.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0)
     _add_report_type_arg(p0)
+    _add_lang_arg(p0)
     p0.set_defaults(func=cmd_all)
 
     p0b = sub.add_parser("all-v3", help="全流程：fetch → report-v3（按章节分段，篇幅充足）")
@@ -619,6 +642,7 @@ def main():
     pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
     pfr.add_argument("--no-resume", action="store_true", help="禁用断点续跑，强制从头执行")
     pfr.add_argument("--interactive", action="store_true", help="交互式审阅模式")
+    _add_lang_arg(pfr)
     pfr.set_defaults(func=cmd_full_report)
 
     args = parser.parse_args()
