@@ -188,7 +188,7 @@ def cmd_report_v4(args):
     """报告 4.0：对 3.0 做事实核查与出处标注，调用 Perplexity 获取引用，在正文插入 [n] 标记并生成 References。"""
     from src.step6_report_v4 import run_report_v4
     report_v3 = _resolve_path(args.report_v3, REPORT_DIR)
-    run_report_v4(report_v3, args.output_base)
+    run_report_v4(report_v3, args.output_base, getattr(args, "skip_citation_verify", False))
 
 
 def cmd_report_v5(args):
@@ -470,6 +470,7 @@ def main():
     subparsers_map["report-v4"] = p6
     p6.add_argument("report_v3", help="报告 3.0 路径，如 output/reports/xxx_report_v3.md")
     p6.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    p6.add_argument("--skip-citation-verify", action="store_true", help="跳过引用 URL 可达性验证")
     p6.set_defaults(func=cmd_report_v4)
 
     pqe = sub.add_parser("quality-eval", help="质量评估：对报告进行多维度质量打分")

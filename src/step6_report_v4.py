@@ -5,8 +5,10 @@ Step6: 对报告 3.0 进行事实核查与出处标注，生成报告 4.0。
 - Perplexity 自动分析实体、事件、数据等事实并标注引用
 - 引用编码按章节顺序递增，调用次数 = 章节数
 """
+import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
@@ -68,7 +70,41 @@ def _format_references(ref_list: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def run_report_v4(report_v3_path: Path, output_basename: str = None) -> dict:
+def _verify_citations(ref_list: list[dict], timeout: float = 10.0) -> list[dict]:
+    """并行 HTTP HEAD 检查引用 URL 可达性，返回带 status 字段的列表。"""
+    import urllib.request
+    import urllib.error
+
+    def _check_one(ref):
+        url = ref.get("url", "")
+        if not url:
+            return {**ref, "status": "unreachable"}
+        try:
+            req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return {**ref, "status": "ok", "http_code": resp.status}
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, Exception):
+            return {**ref, "status": "unreachable"}
+
+    results = []
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_check_one, r): i for i, r in enumerate(ref_list)}
+        indexed = [None] * len(ref_list)
+        for future in as_completed(futures):
+            i = futures[future]
+            indexed[i] = future.result()
+        results = indexed
+    return results
+
+
+def _mark_unverified_in_text(report_text: str, unverified_indices: list[int]) -> str:
+    """将不可达引用的 [N] 标记替换为 [N 待验证]。"""
+    for idx in unverified_indices:
+        report_text = report_text.replace(f"[{idx}]", f"[{idx} 待验证]")
+    return report_text
+
+
+def run_report_v4(report_v3_path: Path, output_basename: str = None, skip_citation_verify: bool = False) -> dict:
     """
     对报告 3.0 做事实核查与引用标注，生成报告 4.0。
     按章节顺序提交给 Perplexity，由 Perplexity 自动分析并标注引用。
@@ -140,6 +176,25 @@ def run_report_v4(report_v3_path: Path, output_basename: str = None) -> dict:
         report_v4_text = report_v4_text.rstrip() + "\n\n---\n\n" + refs_section
 
     _log(f"共获得 {len(ref_list)} 个引用来源")
+
+    # 引用验证
+    if ref_list and not skip_citation_verify:
+        _log("Step6 引用验证：并行检查 URL 可达性...")
+        verified_refs = _verify_citations(ref_list)
+        unverified = [i + 1 for i, r in enumerate(verified_refs) if r.get("status") != "ok"]
+        if unverified:
+            _log(f"    {len(unverified)} 个引用不可达，标记为 [N 待验证]")
+            report_v4_text = _mark_unverified_in_text(report_v4_text, unverified)
+        else:
+            _log("    全部引用验证通过")
+
+        # 保存验证结果
+        cite_check_path = REPORT_DIR / f"{base}_citation_check.json"
+        cite_check_path.write_text(
+            json.dumps(verified_refs, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        _log(f"    验证结果已保存: {cite_check_path.name}")
 
     # 保存 Markdown
     report_v4_path = REPORT_DIR / f"{base}_report_v4.md"
