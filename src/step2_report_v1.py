@@ -36,7 +36,7 @@ MAX_WORKERS = 4
 
 def _api_build_outline(content: str, template_constraints: str = "") -> dict:
     """调用 API 分析语料，构建文档大纲。≤7 章，最多三级目录。"""
-    prompt = f"""请分析以下「原始对话语料」的整体内容，构建一份文档大纲。
+    prompt = """请分析以下「原始对话语料」的整体内容，构建一份文档大纲。
 
 【硬性要求】
 1. **章节数量**：一般不超过 7 章。
@@ -46,26 +46,26 @@ def _api_build_outline(content: str, template_constraints: str = "") -> dict:
 5. **篇幅密度**：为每章标注 "density"（1-5），表示该章在原始语料中的内容丰富度：1=概述性/简短，5=数据密集/案例丰富。
 
 【输出格式】仅输出一个 JSON 对象，不要其他说明：
-{{
+{
   "title": "报告主标题",
   "summary": "200字以内摘要",
   "keywords": ["关键词1", "关键词2", "关键词3", "关键词4", "关键词5"],
   "outline": [
-    {{
+    {
       "level1": "一、第一章标题",
       "density": 3,
       "level2": [
-        {{"title": "1.1 第一节标题", "level3": ["（1）小标题", "（2）小标题"]}},
-        {{"title": "1.2 第二节标题", "level3": []}}
+        {"title": "1.1 第一节标题", "level3": ["（1）小标题", "（2）小标题"]},
+        {"title": "1.2 第二节标题", "level3": []}
       ]
-    }},
-    {{
+    },
+    {
       "level1": "二、第二章标题",
       "density": 4,
       "level2": [...]
-    }}
+    }
   ]
-}}
+}
 
 """
     if template_constraints:

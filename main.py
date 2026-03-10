@@ -150,7 +150,7 @@ def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_t
 
     _log_step("Step3 专家评审")
     from src.step3_experts import run_experts
-    expert_result = run_experts(report_v1_path, base, report_type)
+    run_experts(report_v1_path, base, report_type)
 
     # 交互点2：专家仲裁确认
     if interactive:
@@ -313,7 +313,7 @@ def cmd_quality_eval(args):
     base = args.output_base or report_path.stem
     output_path = REPORT_DIR / f"{base}_quality_eval.json"
     result = evaluate_report_quality(report_text, raw_text, base, output_path)
-    print(f"\n质量评估结果:")
+    print("\n质量评估结果:")
     for k, v in result.items():
         if k != "commentary":
             print(f"  {k}: {v}")
