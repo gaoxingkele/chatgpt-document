@@ -121,8 +121,15 @@ def _add_runs_with_formatting(paragraph, text: str, font_size, font_name: str = 
 
 
 def _add_formatted_text_segment(paragraph, text: str, font_size, font_name: str = "宋体") -> None:
-    """解析文本片段中的 **加粗**、*斜体*、[链接](url)。"""
-    pattern = re.compile(r'(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*)')
+    """解析文本片段中的 **加粗**、*斜体*、[链接](url)、[N] 引用标记。"""
+    # 匹配：链接、加粗、斜体、引用标记 [数字] / [数字 待验证]
+    pattern = re.compile(
+        r'(\[([^\]]+)\]\(([^)]+)\)'   # [text](url) 链接
+        r'|\*\*([^*]+)\*\*'            # **bold**
+        r'|\*([^*]+)\*'                # *italic*
+        r'|\[(\d+(?:\s*待验证)?)\]'    # [1] 或 [1 待验证] 引用标记
+        r')'
+    )
     pos = 0
     for m in pattern.finditer(text):
         if m.start() > pos:
@@ -140,6 +147,12 @@ def _add_formatted_text_segment(paragraph, text: str, font_size, font_name: str 
             r = paragraph.add_run(m.group(5))
             r.italic = True
             r.font.size = font_size
+            r.font.name = font_name
+        elif m.group(6):
+            # 引用标记 [N] → 上标样式
+            r = paragraph.add_run(f"[{m.group(6)}]")
+            r.font.superscript = True
+            r.font.size = Pt(9)
             r.font.name = font_name
         pos = m.end()
     if pos < len(text):

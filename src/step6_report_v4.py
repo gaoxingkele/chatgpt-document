@@ -27,14 +27,19 @@ def _process_chapter_with_perplexity(chapter_title: str, chapter_body: str) -> t
     """
     prompt = f"""请分析以下章节内容，完成以下任务：
 
-1. **识别需要出处核查的陈述**：包括具体数据、比例、金额、人物、机构名称、行业标准、技术参数、可验证的事实性陈述。
+1. **识别需要出处核查的陈述**：包括具体数据、比例、金额、人物、机构名称、行业标准、技术参数、算法名称、学术论文引用、可验证的事实性陈述。
 2. **检索并标注引用**：利用你的检索能力，为上述陈述找到可靠的外部来源，在对应位置插入引用标记 [1]、[2]、[3]...（按首次出现顺序编号）。
 3. **输出格式**：直接输出修改后的完整章节，包含：
    - 章标题：{chapter_title}
    - 正文：在需要引用的陈述后插入空格和 [n]
    - 不要添加额外的 References 小节（我会统一汇总）
+4. **引用偏好**：
+   - 学术论文优先使用 DOI 链接或 arXiv 链接
+   - 对于已知作者和年份的来源，在返回的 citations 中尽量包含 author 和 year 信息
+   - 优先使用权威学术来源（期刊论文、会议论文、官方文档），其次是权威媒体
+5. **数学公式保留**：章节中的 $...$ 和 $$...$$ 数学公式标记须原样保留，不修改。
 
-对于无法找到公开来源的项目内部设计或假设性内容，可不标注。优先使用权威媒体、官方文档、学术来源。
+对于无法找到公开来源的项目内部设计或假设性内容，可不标注。
 
 【章节内容】
 {chapter_body}
@@ -60,13 +65,24 @@ def _renumber_citation_markers(text: str, offset: int) -> str:
     return re.sub(r"\[(\d+)\]", repl, text)
 
 
-def _format_references(ref_list: list[dict]) -> str:
-    """生成 References 小节 Markdown。"""
+def _format_references(ref_list: list[dict], style: str = "numbered") -> str:
+    """
+    生成 References 小节 Markdown。
+    style: "numbered" → [1] Title. URL
+           "author_year" → [1] Author (Year). Title. URL
+    """
     lines = ["## References\n"]
     for i, r in enumerate(ref_list, 1):
         url = r.get("url", "")
         title = r.get("title", url)
-        lines.append(f"[{i}] {title}. {url}")
+        author = r.get("author", "")
+        year = r.get("year", "")
+        if style == "author_year" and (author or year):
+            author_part = author or "Unknown"
+            year_part = f" ({year})" if year else ""
+            lines.append(f"[{i}] {author_part}{year_part}. {title}. {url}")
+        else:
+            lines.append(f"[{i}] {title}. {url}")
     return "\n".join(lines)
 
 
@@ -104,10 +120,17 @@ def _mark_unverified_in_text(report_text: str, unverified_indices: list[int]) ->
     return report_text
 
 
-def run_report_v4(report_v3_path: Path, output_basename: str = None, skip_citation_verify: bool = False) -> dict:
+def run_report_v4(
+    report_v3_path: Path,
+    output_basename: str = None,
+    skip_citation_verify: bool = False,
+    citation_style: str = "numbered",
+) -> dict:
     """
     对报告 3.0 做事实核查与引用标注，生成报告 4.0。
     按章节顺序提交给 Perplexity，由 Perplexity 自动分析并标注引用。
+    citation_style: "numbered" → [1] Title. URL
+                    "author_year" → [1] Author (Year). Title. URL
     返回 report_v4_path（.md）、docx_path（.docx）、report_v4_text。
     """
     report_v3_path = Path(report_v3_path)
@@ -161,7 +184,7 @@ def run_report_v4(report_v3_path: Path, output_basename: str = None, skip_citati
     report_v4_body = "\n\n".join(revised_parts)
 
     # 拼接：头部 + 正文 + References
-    refs_section = _format_references(ref_list)
+    refs_section = _format_references(ref_list, style=citation_style)
     report_v4_text = f"{header}\n\n{report_v4_body}".strip()
 
     # 更新版本号
