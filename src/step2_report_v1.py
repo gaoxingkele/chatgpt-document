@@ -34,7 +34,7 @@ from src.prompts import REPORT_WRITER_PROMPT as SYSTEM_PROMPT
 MAX_WORKERS = 4
 
 
-def _api_build_outline(content: str) -> dict:
+def _api_build_outline(content: str, template_constraints: str = "") -> dict:
     """调用 API 分析语料，构建文档大纲。≤7 章，最多三级目录。"""
     prompt = f"""请分析以下「原始对话语料」的整体内容，构建一份文档大纲。
 
@@ -67,6 +67,13 @@ def _api_build_outline(content: str) -> dict:
   ]
 }}
 
+"""
+    if template_constraints:
+        prompt += f"""
+【报告模板约束（须遵守）】
+{template_constraints}
+"""
+    prompt += f"""
 原始语料：
 ---
 {content[:OUTLINE_RAW_LIMIT]}
@@ -394,7 +401,7 @@ def _assemble_chapter(
     return "\n\n".join(parts) if parts else ""
 
 
-def run_meta_and_report_v1(raw_path: Path, output_basename: str = None) -> dict:
+def run_meta_and_report_v1(raw_path: Path, output_basename: str = None, report_type: str = None) -> dict:
     """
     读取原始语料 → 构建大纲 → 并行装配各章 → 并行添加章首章末 → 补充缺失 → 去重 → 输出 1.0。
     """
@@ -409,7 +416,27 @@ def run_meta_and_report_v1(raw_path: Path, output_basename: str = None) -> dict:
     _log("Step2 报告 1.0：开始")
     _log(f"原始语料: {raw_path.name}, 共 {len(content)} 字")
     _log("=" * 60)
-    meta = _api_build_outline(content)
+    # 加载模板约束（如有）
+    template_constraints = ""
+    if report_type:
+        try:
+            from src.report_type_profiles import load_report_type_profile
+            profile = load_report_type_profile(report_type)
+            parts = []
+            min_ch = profile.get("min_chapters", 3)
+            max_ch = profile.get("max_chapters", 7)
+            parts.append(f"- 章节数量：{min_ch}~{max_ch} 章")
+            min_chars = profile.get("min_total_chars", 10000)
+            parts.append(f"- 最低总字数目标：{min_chars} 字")
+            # 从 sections 中提取大纲约束
+            outline_constraint = profile.get("sections", {}).get("大纲约束", "")
+            if outline_constraint:
+                parts.append(f"- 大纲约束：\n{outline_constraint}")
+            template_constraints = "\n".join(parts)
+        except Exception:
+            pass
+
+    meta = _api_build_outline(content, template_constraints)
     meta = _api_review_outline(meta, content)
     outline = meta.get("outline", [])
     if not outline:

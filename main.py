@@ -130,7 +130,7 @@ def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_t
     from src.step2_report_v1 import run_meta_and_report_v1
 
     _log_step("Step2 报告 1.0")
-    r1 = run_meta_and_report_v1(raw_path, base)
+    r1 = run_meta_and_report_v1(raw_path, base, report_type)
     report_v1_path = Path(r1["report_v1_path"])
 
     # 交互点1：大纲审阅

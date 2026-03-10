@@ -78,12 +78,25 @@ def load_report_type_profile(report_type: str | None = None) -> dict:
     text = profile_path.read_text(encoding="utf-8", errors="replace")
     front_matter, body = _parse_front_matter(text)
     sections = _parse_sections(body)
+    # 解析整数型 front matter
+    def _int_or_default(key, default):
+        val = front_matter.get(key, "")
+        try:
+            return int(val)
+        except (ValueError, TypeError):
+            return default
+
     return {
         "report_type": front_matter.get("report_type", rt),
         "display_name": front_matter.get("display_name", rt),
         "policy_name": front_matter.get("policy_name", "policy1"),
         "step7_title_suffix": front_matter.get("step7_title_suffix", "学术风格分析报告"),
         "step8_output_suffix": front_matter.get("step8_output_suffix", "报告_v5"),
+        # 模板约束（3.14）
+        "min_chapters": _int_or_default("min_chapters", 3),
+        "max_chapters": _int_or_default("max_chapters", 7),
+        "min_total_chars": _int_or_default("min_total_chars", 10000),
+        "default_style": front_matter.get("default_style", "A"),
         "sections": sections,
         "profile_path": str(profile_path),
     }
