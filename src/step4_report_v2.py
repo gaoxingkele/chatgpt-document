@@ -17,7 +17,7 @@ from config import (
 )
 from src.llm_client import chat
 from src.utils.log import log as _log
-from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, extract_chapter_context as _extract_chapter_context
 from src.utils.docx_utils import save_docx_safe
 from src.utils.parallel import parallel_map
 
@@ -53,6 +53,7 @@ def _api_revise_chapter(
     target_chars: int,
     chapter_idx: int,
     total_chapters: int,
+    context: dict = None,
 ) -> str:
     """对单章进行整改，返回该章完整正文（含章标题）。强调篇幅必须达标。"""
     hall_section = ""
@@ -82,8 +83,19 @@ def _api_revise_chapter(
 ---
 {expert_text[:REVISE_EXPERT_LIMIT]}
 ---
-{hall_section}{raw_section}
+{hall_section}{raw_section}"""
+    # 章节上下文（仅对较长章节注入）
+    if context and len(chapter_body) >= 1500:
+        ctx_section = "\n【章节上下文（供衔接参考）】\n"
+        if context.get("toc"):
+            ctx_section += f"全文目录：\n{context['toc']}\n"
+        if context.get("prev_summary"):
+            ctx_section += f"上一章末尾：{context['prev_summary']}\n"
+        if context.get("next_summary"):
+            ctx_section += f"下一章开头：{context['next_summary']}\n"
+        prompt += ctx_section
 
+    prompt += f"""
 【极其重要的篇幅要求（必须遵守）】
 - 本章输出字数**不少于 {target_chars} 字**。禁止压缩、禁止将多段合并成一句或要点罗列。
 - 重写、去重、理顺逻辑，但**不要删减论证、案例、表格、数据**。
@@ -164,6 +176,7 @@ def run_report_v2_and_docx(
     t0 = time.time()
 
     raw_len = len(raw_text)
+    contexts = _extract_chapter_context(chapters)
 
     def _revise_one(idx, chapter):
         ch_title, ch_body = chapter
@@ -180,6 +193,7 @@ def run_report_v2_and_docx(
             chapter_targets[idx],
             idx + 1,
             num_chapters,
+            context=contexts[idx],
         )
         _log(f"[并行] 第 {idx + 1} 章完成，输出约 {len(revised)} 字")
         return revised

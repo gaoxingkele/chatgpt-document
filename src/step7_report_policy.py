@@ -15,7 +15,7 @@ from config import (
 )
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
-from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text, extract_chapter_context as _extract_chapter_context
 from src.utils.docx_utils import save_docx_safe
 from src.utils.parallel import parallel_map
 
@@ -31,6 +31,7 @@ def _process_single_chapter(
     ch_body: str,
     style_guide: str,
     raw_preview: str,
+    context: dict = None,
 ) -> tuple[int, str, str]:
     """处理单个章节的风格化改写，返回 (idx, ch_title, revised_text)。"""
     _log(f"[并行] 风格化第 {idx + 1}/{total} 章: {ch_title[:40]}...")
@@ -53,6 +54,19 @@ def _process_single_chapter(
 【本章正文】
 {ch_body[:body_limit]}
 
+"""
+    # 章节上下文注入（仅较长章节）
+    if context and len(ch_body) >= 1500:
+        ctx_section = "\n【章节上下文（供衔接参考）】\n"
+        if context.get("toc"):
+            ctx_section += f"全文目录：\n{context['toc']}\n"
+        if context.get("prev_summary"):
+            ctx_section += f"上一章末尾：{context['prev_summary']}\n"
+        if context.get("next_summary"):
+            ctx_section += f"下一章开头：{context['next_summary']}\n"
+        prompt += ctx_section
+
+    prompt += f"""
 请直接输出改写后的完整章节，以 `## {ch_title}` 开头，使用 Markdown。不要 JSON 或多余说明。"""
 
     resp = chat(
@@ -86,10 +100,11 @@ def _process_by_chapters(
 {summary_text[:SUMMARY_TEXT_LIMIT]}
 """
     total = len(chapters)
+    contexts = _extract_chapter_context(chapters)
 
     def _do_chapter(idx, chapter):
         ch_title, ch_body = chapter
-        _, _, revised = _process_single_chapter(idx, total, ch_title, ch_body, style_guide, raw_preview)
+        _, _, revised = _process_single_chapter(idx, total, ch_title, ch_body, style_guide, raw_preview, context=contexts[idx])
         return revised
 
     revised_parts = parallel_map(_do_chapter, chapters)

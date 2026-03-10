@@ -12,7 +12,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
 from config import REPORT_DIR, PROSE_RAW_LIMIT, PROSE_CHAPTER_BODY_LIMIT
 from src.llm_client import chat
-from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters
+from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, extract_chapter_context as _extract_chapter_context
 from src.utils.docx_utils import save_docx_safe
 from src.utils.file_utils import load_raw_content as _load_raw_content
 from src.utils.parallel import parallel_map
@@ -55,6 +55,7 @@ def _api_convert_chapter_to_prose(
     raw_chunk: str,
     chapter_idx: int,
     total_chapters: int,
+    context: dict = None,
 ) -> str:
     """将单章内容转换为自然叙述文体，应用指定风格；并剔除报告 2.0 中未在原始语料出现的幻觉内容。"""
     hallucination_rule = ""
@@ -85,6 +86,19 @@ def _api_convert_chapter_to_prose(
 {chapter_body[:PROSE_CHAPTER_BODY_LIMIT]}
 ---
 
+"""
+    # 章节上下文注入（仅较长章节）
+    if context and len(chapter_body) >= 1500:
+        ctx_section = "\n【章节上下文（供衔接参考）】\n"
+        if context.get("toc"):
+            ctx_section += f"全文目录：\n{context['toc']}\n"
+        if context.get("prev_summary"):
+            ctx_section += f"上一章末尾：{context['prev_summary']}\n"
+        if context.get("next_summary"):
+            ctx_section += f"下一章开头：{context['next_summary']}\n"
+        prompt += ctx_section
+
+    prompt += f"""
 请直接输出改写后的完整章节，以 `## {chapter_title}` 开头，使用 Markdown（### 等）。不要 JSON 或多余说明。"""
 
     system_content = "你是专业的文档改写专家。核心任务：将列表式、大纲式内容改写为自然流畅的叙述文体，同时保持信息完整、逻辑清晰。"
@@ -150,6 +164,8 @@ def run_report_final(
         if first_line.startswith("# "):
             header_v3 = header_v3.replace(first_line, first_line + f"（{style_info['name']}）", 1)
 
+    contexts = _extract_chapter_context(chapters)
+
     def _convert_one(idx, chapter):
         ch_title, ch_body = chapter
         _log(f"[并行] 改写第 {idx + 1}/{num_chapters} 章: {ch_title[:40]}...")
@@ -160,6 +176,7 @@ def run_report_final(
             raw_text,
             idx + 1,
             num_chapters,
+            context=contexts[idx],
         )
         _log(f"[并行] 第 {idx + 1} 章完成，输出约 {len(revised)} 字")
         return revised

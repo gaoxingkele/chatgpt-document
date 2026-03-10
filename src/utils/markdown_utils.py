@@ -25,6 +25,28 @@ def parse_report_chapters(text: str) -> tuple[str, list[tuple[str, str]]]:
     return header, chapters
 
 
+def extract_chapter_context(chapters: list[tuple[str, str]], context_chars: int = 500) -> list[dict]:
+    """
+    为每个章节生成上下文信息，用于 LLM 章节改写时的衔接参考。
+
+    返回: [{"prev_summary": str, "next_summary": str, "toc": str}, ...]
+    """
+    # 全文目录
+    toc = "\n".join(f"- {title}" for title, _ in chapters)
+
+    contexts = []
+    for i in range(len(chapters)):
+        ctx = {"toc": toc, "prev_summary": "", "next_summary": ""}
+        if i > 0:
+            prev_body = chapters[i - 1][1]
+            ctx["prev_summary"] = prev_body[-context_chars:].strip() if len(prev_body) > context_chars else prev_body.strip()
+        if i < len(chapters) - 1:
+            next_body = chapters[i + 1][1]
+            ctx["next_summary"] = next_body[:context_chars].strip() if len(next_body) > context_chars else next_body.strip()
+        contexts.append(ctx)
+    return contexts
+
+
 def read_report_text(path: Path) -> str:
     """读取报告内容，支持 .md 和 .docx。"""
     path = Path(path)
