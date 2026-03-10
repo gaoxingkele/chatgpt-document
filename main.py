@@ -109,7 +109,7 @@ def _add_report_type_arg(parser: argparse.ArgumentParser):
     )
 
 
-def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None):
+def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None, interactive: bool = False):
     """共享 pipeline：1.0 → 专家 → 2.0 → 3.0 最终版。由 cmd_batch/cmd_all 调用。"""
     from src.step2_report_v1 import run_meta_and_report_v1
 
@@ -117,13 +117,55 @@ def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_t
     r1 = run_meta_and_report_v1(raw_path, base)
     report_v1_path = Path(r1["report_v1_path"])
 
+    # 交互点1：大纲审阅
+    if interactive:
+        import json
+        from src.utils.interactive import prompt_user_confirmation
+        meta = r1.get("meta", {})
+        outline_preview = json.dumps(meta.get("outline", []), ensure_ascii=False, indent=2)[:1500]
+        confirmed, edited = prompt_user_confirmation(
+            "大纲已生成，是否确认继续？",
+            detail=f"标题: {meta.get('title', '')}\n大纲:\n{outline_preview}",
+            allow_edit=False,
+        )
+        if not confirmed:
+            _log_step("用户取消，流程终止")
+            return
+
     _log_step("Step3 专家评审")
     from src.step3_experts import run_experts
-    run_experts(report_v1_path, base, report_type)
+    expert_result = run_experts(report_v1_path, base, report_type)
+
+    # 交互点2：专家仲裁确认
+    if interactive:
+        from src.utils.interactive import prompt_user_confirmation
+        from config import EXPERT_DIR
+        arbitrate_path = EXPERT_DIR / f"{base}_专家意见仲裁.md"
+        arbitrate_preview = ""
+        if arbitrate_path.is_file():
+            arbitrate_preview = arbitrate_path.read_text(encoding="utf-8", errors="replace")[:1500]
+        confirmed, _ = prompt_user_confirmation(
+            "专家评审与仲裁已完成，是否确认继续？",
+            detail=arbitrate_preview,
+        )
+        if not confirmed:
+            _log_step("用户取消，流程终止")
+            return
 
     _log_step("Step4 报告 2.0")
     from src.step4_report_v2 import run_report_v2_and_docx
     run_report_v2_and_docx(report_v1_path, None, base, raw_path)
+
+    # 交互点3：风格选择
+    if interactive:
+        from src.utils.interactive import prompt_user_confirmation
+        confirmed, edited = prompt_user_confirmation(
+            f"即将使用风格 {style} 生成报告 3.0。是否确认？（A=商业模式 B=可行性 C=学术综述）",
+            allow_edit=False,
+        )
+        if not confirmed:
+            _log_step("用户取消，流程终止")
+            return
 
     _log_step("Step5 报告 3.0 最终版")
     report_v2_path = _find_report(base, "report_v2")
@@ -151,7 +193,7 @@ def cmd_batch(args):
     _log_step("Step0 语料重整")
     raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
 
-    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None))
+    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None), getattr(args, "interactive", False))
     _log_banner("批量语料流程完成")
 
 
@@ -296,7 +338,7 @@ def cmd_all(args):
     raw_path = run_ingest(args.input, args.output)
     base = args.output or (raw_path.stem if raw_path else "share")
 
-    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None))
+    _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None), getattr(args, "interactive", False))
 
     elapsed = time.time() - t_start
     _log_banner(f"全流程完成，总耗时 {elapsed/60:.1f} 分钟")
@@ -343,7 +385,7 @@ def cmd_full_report(args):
     if should_skip_step(progress, "standard_pipeline"):
         _log_step("跳过 Step2~Step5（已完成）")
     else:
-        _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type)
+        _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type, getattr(args, "interactive", False))
         save_progress(base, REPORT_DIR, "standard_pipeline")
 
     # Step6: 报告 4.0
@@ -452,6 +494,7 @@ def main():
     p0b2.add_argument("-o", "--output", default=None, help="输出文件名前缀")
     p0b2.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
     p0b2.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    p0b2.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0b2)
     _add_report_type_arg(p0b2)
     p0b2.set_defaults(func=cmd_batch)
@@ -548,6 +591,7 @@ def main():
     p0.add_argument("input", help="本地文件路径或分享链接")
     p0.add_argument("-o", "--output", default=None, help="各步骤输出文件名前缀")
     p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    p0.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0)
     _add_report_type_arg(p0)
     p0.set_defaults(func=cmd_all)
@@ -574,6 +618,7 @@ def main():
     _add_report_type_arg(pfr)
     pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
     pfr.add_argument("--no-resume", action="store_true", help="禁用断点续跑，强制从头执行")
+    pfr.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     pfr.set_defaults(func=cmd_full_report)
 
     args = parser.parse_args()
