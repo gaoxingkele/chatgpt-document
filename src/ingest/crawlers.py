@@ -175,6 +175,7 @@ def _process_dom_parts(all_element_parts: list, base_url: str = "") -> CrawlResu
     """
     将 DOM walker 返回的 parts 列表处理为 CrawlResult。
     图片 URL 会解析为绝对地址；文本中插入 Markdown 图片/公式占位符。
+    如果 DOM 未检测到公式（KaTeX/MathJax），则由 crawl_url() 统一做 Unicode 数学字符检测。
     """
     img_counter = 0
     formula_count = 0
@@ -210,8 +211,10 @@ def _process_dom_parts(all_element_parts: list, base_url: str = "") -> CrawlResu
             seen_texts.add(segment)
             text_segments.append(segment)
 
+    full_text = "\n\n".join(text_segments)
+
     return CrawlResult(
-        text="\n\n".join(text_segments),
+        text=full_text,
         images=images,
         formula_count=formula_count,
     )
@@ -418,16 +421,16 @@ def crawl_url(url: str, platform: str = "chatgpt") -> CrawlResult:
     selectors = _CHATGPT_SELECTORS if platform == "chatgpt" else _GENERIC_SELECTORS
 
     try:
-        return asyncio.run(_crawl_pyppeteer(url, selectors))
+        result = asyncio.run(_crawl_pyppeteer(url, selectors))
     except ImportError:
         print("[提示] Pyppeteer 未安装，尝试使用 Playwright 备用...")
-        return asyncio.run(_crawl_playwright(url, selectors))
+        result = asyncio.run(_crawl_playwright(url, selectors))
     except Exception as e:
         err_str = str(e).lower()
         if "executable" in err_str or "browser" in err_str or "chrome" in err_str:
             print("[提示] 未找到 Chrome/Edge，尝试 Playwright Chromium...")
         try:
-            return asyncio.run(_crawl_playwright(url, selectors))
+            result = asyncio.run(_crawl_playwright(url, selectors))
         except Exception as e2:
             raise RuntimeError(
                 f"爬虫失败。请安装浏览器：\n"
@@ -435,3 +438,13 @@ def crawl_url(url: str, platform: str = "chatgpt") -> CrawlResult:
                 f"  2. 备用: python main.py install-browser（Playwright Chromium）\n"
                 f"错误: {e2}"
             ) from e2
+
+    # 后处理：如果 DOM 未检测到公式，尝试 Unicode 数学字符 → LaTeX 转换
+    # 覆盖所有代码路径（DOM walker、fallback innerText、Pyppeteer/Playwright）
+    if result.formula_count == 0 and result.text:
+        from src.utils.unicode_math import convert_unicode_math_to_latex, count_math_unicode
+        if count_math_unicode(result.text) >= 3:
+            new_text, fc = convert_unicode_math_to_latex(result.text)
+            result = CrawlResult(text=new_text, images=result.images, formula_count=fc)
+
+    return result
