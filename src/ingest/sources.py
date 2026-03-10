@@ -76,15 +76,44 @@ def run_ingest(input_str: str, output_name: str = None) -> Path:
             raise FileNotFoundError(f"文件不存在: {path}，请检查路径是否正确")
         content = import_from_file(path)
         name = output_name or path.stem
+        out_path = RAW_DIR / f"{name}.txt"
+        out_path.write_text(content, encoding="utf-8")
+        size = len(content.encode("utf-8"))
     else:
         from .crawlers import crawl_url
         _log("API/爬虫: 抓取 URL 中...")
-        content = crawl_url(input_str, platform=src)
+        result = crawl_url(input_str, platform=src)
         name = output_name or _slug_from_input(input_str, src)
+        content = result.text
 
-    out_path = RAW_DIR / f"{name}.txt"
-    size = len(content.encode("utf-8"))
-    out_path.write_text(content, encoding="utf-8")
+        # 有图片时创建语料包，否则保存为 .txt
+        has_images = any(img.get("data") for img in result.images)
+        if has_images:
+            from src.corpus_package import CorpusPackage
+            pkg_dir = RAW_DIR / name
+            pkg = CorpusPackage.create(pkg_dir, content, source=input_str)
+            saved_count = 0
+            for img in result.images:
+                if img.get("data"):
+                    pkg.add_asset(img["data"], img["filename"])
+                    saved_count += 1
+                else:
+                    # 下载失败的图片：将正文中的占位符替换为失败提示
+                    placeholder = f"![{img.get('alt', '')}](assets/{img['filename']})"
+                    content = content.replace(placeholder, "[图片加载失败]")
+            # 若有失败替换，需更新正文
+            if saved_count < len(result.images):
+                (pkg_dir / "corpus.md").write_text(content, encoding="utf-8")
+            out_path = pkg_dir
+            _log(f"已保存 {saved_count} 张图片至语料包")
+            if result.formula_count:
+                _log(f"检测到 {result.formula_count} 个公式")
+        else:
+            out_path = RAW_DIR / f"{name}.txt"
+            out_path.write_text(content, encoding="utf-8")
+
+        size = len(content.encode("utf-8"))
+
     if src != "file" and size < MIN_CONTENT_BYTES:
         _log(f"[警告] 内容可能未完整（< {MIN_CONTENT_BYTES} 字节）")
     _log(f"采集完成: 已保存 {out_path.name}，{size} 字节（约 {len(content)} 字）")
