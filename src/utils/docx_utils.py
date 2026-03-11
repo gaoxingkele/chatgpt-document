@@ -462,31 +462,16 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             i += 1
             continue
 
-        # 一级标题 # -> 18pt 加粗
-        if stripped.startswith("# ") and not stripped.startswith("## "):
-            p = doc.add_paragraph(stripped[2:].strip())
-            p.style = "Heading 1"
+        # 标题 # ~ ###### -> Heading 1~6，字号递减
+        _heading_match = re.match(r'^(#{1,6})\s+(.+)$', stripped)
+        if _heading_match:
+            _h_level = len(_heading_match.group(1))
+            _h_text = _heading_match.group(2).strip()
+            _h_sizes = {1: 18, 2: 16, 3: 14, 4: 13, 5: 12, 6: 11}
+            p = doc.add_paragraph(_h_text)
+            p.style = f"Heading {_h_level}"
             p.runs[0].bold = True
-            p.runs[0].font.size = Pt(18)
-            p.runs[0].font.name = heading_font
-            i += 1
-            continue
-
-        # 二级标题 ## -> 16pt 加粗
-        if stripped.startswith("## ") and not stripped.startswith("### "):
-            p = doc.add_paragraph(stripped[3:].strip())
-            p.style = "Heading 2"
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(16)
-            p.runs[0].font.name = heading_font
-            i += 1
-            continue
-
-        # 三级标题 ### -> 14pt 加粗
-        if stripped.startswith("### "):
-            p = doc.add_paragraph(stripped[4:].strip())
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(14)
+            p.runs[0].font.size = Pt(_h_sizes.get(_h_level, 12))
             p.runs[0].font.name = heading_font
             i += 1
             continue
