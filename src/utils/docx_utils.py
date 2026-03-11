@@ -11,7 +11,7 @@ from pathlib import Path
 from docx import Document
 from docx.shared import Pt, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import nsdecls
+from docx.oxml.ns import nsdecls, qn
 from docx.oxml import parse_xml
 
 
@@ -470,9 +470,12 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             _h_sizes = {1: 18, 2: 16, 3: 14, 4: 13, 5: 12, 6: 11}
             p = doc.add_paragraph(_h_text)
             p.style = f"Heading {_h_level}"
-            p.runs[0].bold = True
-            p.runs[0].font.size = Pt(_h_sizes.get(_h_level, 12))
-            p.runs[0].font.name = heading_font
+            run = p.runs[0]
+            run.bold = True
+            run.italic = False
+            run.font.size = Pt(_h_sizes.get(_h_level, 12))
+            run.font.name = heading_font
+            run.font.element.rPr.rFonts.set(qn("w:eastAsia"), heading_font)
             i += 1
             continue
 

@@ -398,9 +398,9 @@ class _LaTeXParser:
             den = self.parse_group()
             f = _make_el("f")
             num_el = _make_el("num")
-            num_el.append(_latex_to_omml_inner(num))
+            _append_omml_children(num_el, _latex_to_omml_inner(num))
             den_el = _make_el("den")
-            den_el.append(_latex_to_omml_inner(den))
+            _append_omml_children(den_el, _latex_to_omml_inner(den))
             f.append(num_el)
             f.append(den_el)
             return self._check_scripts(f)
@@ -412,7 +412,7 @@ class _LaTeXParser:
             rad = _make_el("rad")
             deg_el = _make_el("deg")
             if opt:
-                deg_el.append(_latex_to_omml_inner(opt))
+                _append_omml_children(deg_el, _latex_to_omml_inner(opt))
             rad.append(deg_el)
             e = _wrap_in_e(_latex_to_omml_inner(body))
             rad.append(e)
@@ -462,10 +462,10 @@ class _LaTeXParser:
                 sub_text = self.parse_group()
             sub_el = _make_el("sub")
             if sub_text:
-                sub_el.append(_latex_to_omml_inner(sub_text))
+                _append_omml_children(sub_el, _latex_to_omml_inner(sub_text))
             sup_el = _make_el("sup")
             if sup_text:
-                sup_el.append(_latex_to_omml_inner(sup_text))
+                _append_omml_children(sup_el, _latex_to_omml_inner(sup_text))
             nary.append(sub_el)
             nary.append(sup_el)
             # 剩余部分作为 body（取一个表达式）
@@ -580,9 +580,9 @@ class _LaTeXParser:
             el = _make_el("sSubSup")
             el.append(_wrap_in_e(base))
             sub_el = _make_el("sub")
-            sub_el.append(_latex_to_omml_inner(sub_text))
+            _append_omml_children(sub_el, _latex_to_omml_inner(sub_text))
             sup_el = _make_el("sup")
-            sup_el.append(_latex_to_omml_inner(sup_text))
+            _append_omml_children(sup_el, _latex_to_omml_inner(sup_text))
             el.append(sub_el)
             el.append(sup_el)
             return el
@@ -590,14 +590,14 @@ class _LaTeXParser:
             el = _make_el("sSup")
             el.append(_wrap_in_e(base))
             sup_el = _make_el("sup")
-            sup_el.append(_latex_to_omml_inner(sup_text))
+            _append_omml_children(sup_el, _latex_to_omml_inner(sup_text))
             el.append(sup_el)
             return el
         if has_sub:
             el = _make_el("sSub")
             el.append(_wrap_in_e(base))
             sub_el = _make_el("sub")
-            sub_el.append(_latex_to_omml_inner(sub_text))
+            _append_omml_children(sub_el, _latex_to_omml_inner(sub_text))
             el.append(sub_el)
             return el
         return base
@@ -606,7 +606,7 @@ class _LaTeXParser:
         el = _make_el("sSup")
         el.append(_wrap_in_e(base))
         sup_el = _make_el("sup")
-        sup_el.append(_latex_to_omml_inner(sup_text))
+        _append_omml_children(sup_el, _latex_to_omml_inner(sup_text))
         el.append(sup_el)
         return el
 
@@ -614,7 +614,7 @@ class _LaTeXParser:
         el = _make_el("sSub")
         el.append(_wrap_in_e(base))
         sub_el = _make_el("sub")
-        sub_el.append(_latex_to_omml_inner(sub_text))
+        _append_omml_children(sub_el, _latex_to_omml_inner(sub_text))
         el.append(sub_el)
         return el
 
@@ -629,7 +629,7 @@ class _LaTeXParser:
             cells = row.split("&")
             for cell in cells:
                 e = _make_el("e")
-                e.append(_latex_to_omml_inner(cell.strip()))
+                _append_omml_children(e, _latex_to_omml_inner(cell.strip()))
                 mr.append(e)
             m.append(mr)
         # 括号包裹
@@ -659,7 +659,7 @@ class _LaTeXParser:
             if not row:
                 continue
             e = _make_el("e")
-            e.append(_latex_to_omml_inner(row))
+            _append_omml_children(e, _latex_to_omml_inner(row))
             eqArr.append(e)
         return eqArr
 
@@ -673,6 +673,17 @@ def _latex_to_omml_inner(latex: str) -> etree._Element:
     if len(children) == 1:
         return children[0]
     return omath
+
+
+def _append_omml_children(parent, inner_el):
+    """将 _latex_to_omml_inner 的结果追加到 parent（如 m:num / m:den / m:sub / m:sup）。
+    如果 inner_el 是 m:oMath，则展开其子元素直接追加，避免嵌套 oMath 导致 Word 渲染空白。"""
+    tag = etree.QName(inner_el.tag).localname if isinstance(inner_el.tag, str) else ""
+    if tag == "oMath":
+        for child in list(inner_el):
+            parent.append(child)
+    else:
+        parent.append(inner_el)
 
 
 def latex_to_omml(latex: str) -> etree._Element:
