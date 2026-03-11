@@ -54,8 +54,8 @@ def _add_display_math(doc, latex: str):
 
 
 def _is_display_math_block(lines: list, i: int) -> tuple:
-    """
-    检测 $$ ... $$ 块级公式。
+    r"""
+    检测块级公式：$$ ... $$  或  \[ ... \]。
     返回 (latex_content, end_line_index) 或 (None, i)。
     """
     stripped = lines[i].strip()
@@ -63,6 +63,11 @@ def _is_display_math_block(lines: list, i: int) -> tuple:
     m = re.match(r'^\$\$(.+)\$\$$', stripped)
     if m:
         return m.group(1).strip(), i + 1
+
+    # 单行 \[ ... \]
+    m2 = re.match(r'^\\\[(.+)\\\]$', stripped)
+    if m2:
+        return m2.group(1).strip(), i + 1
 
     # 多行 $$ 开始
     if stripped == "$$":
@@ -74,6 +79,17 @@ def _is_display_math_block(lines: list, i: int) -> tuple:
             parts.append(lines[j])
             j += 1
         # 未闭合的 $$：作为文本
+        return None, i
+
+    # 多行 \[ 开始
+    if stripped == r"\[":
+        j = i + 1
+        parts = []
+        while j < len(lines):
+            if lines[j].strip() == r"\]":
+                return "\n".join(parts).strip(), j + 1
+            parts.append(lines[j])
+            j += 1
         return None, i
 
     return None, i
@@ -99,16 +115,16 @@ def _xml_escape(text: str) -> str:
 
 
 def _add_runs_with_formatting(paragraph, text: str, font_size, font_name: str = "宋体") -> None:
-    """解析文本中的 $公式$、**加粗**、*斜体*、[链接](url)，并添加到段落。"""
-    # 先拆分行内公式 $...$ （不匹配 $$），再处理其他格式
+    r"""解析文本中的 $公式$、\(公式\)、**加粗**、*斜体*、[链接](url)，并添加到段落。"""
+    # 先拆分行内公式 $...$ 或 \(...\)（不匹配 $$），再处理其他格式
     # 注意：不贪婪匹配，且 $ 不能紧跟 $ 或前接 $
-    math_pattern = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)')
+    math_pattern = re.compile(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)|\\\((.+?)\\\)')
     parts = []
     last = 0
     for m in math_pattern.finditer(text):
         if m.start() > last:
             parts.append(("text", text[last:m.start()]))
-        parts.append(("math", m.group(1)))
+        parts.append(("math", m.group(1) or m.group(2)))
         last = m.end()
     if last < len(text):
         parts.append(("text", text[last:]))
@@ -475,8 +491,8 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
             i += 1
             continue
 
-        # 块级数学公式 $$ ... $$
-        if stripped.startswith("$$"):
+        # 块级数学公式 $$ ... $$ 或 \[ ... \]
+        if stripped.startswith("$$") or stripped.startswith(r"\["):
             latex, next_i = _is_display_math_block(lines, i)
             if latex is not None:
                 _add_display_math(doc, latex)
