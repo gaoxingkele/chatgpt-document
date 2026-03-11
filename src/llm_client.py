@@ -147,6 +147,9 @@ def _openai_compatible_chat(provider: str, messages: list, model: str = None, ma
     # kimi-k2.5 等模型仅允许 temperature=1
     if provider == "kimi" and "k2" in m.lower():
         temperature = 1.0
+    # deepseek max_tokens 上限 8192
+    if provider == "deepseek" and max_tokens > 8192:
+        max_tokens = 8192
     resp = client.chat.completions.create(
         model=m,
         messages=messages,
