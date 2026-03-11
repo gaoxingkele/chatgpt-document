@@ -20,7 +20,7 @@ import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 from config import (
     REPORT_DIR,
     OUTLINE_RAW_LIMIT, OUTLINE_REVIEW_RAW_LIMIT, CHAPTER_INTRO_BODY_LIMIT,
-    SUPPLEMENT_RAW_LIMIT, SUPPLEMENT_REPORT_LIMIT, DEDUP_REPORT_LIMIT,
+    SUPPLEMENT_RAW_LIMIT,
     ASSEMBLE_CHUNK_SIZE,
 )
 from src.llm_client import chat
@@ -263,83 +263,154 @@ def _api_add_chapter_intro_summary(
     return resp
 
 
-def _api_supplement_missing(raw_content: str, report_text: str, step_desc: str = "") -> str:
-    """对比原始语料与报告 1.0，找出缺失内容并补充到对应章节。"""
-    if step_desc:
-        _log(step_desc)
-    t0 = time.time()
-    raw_chunk = raw_content[:SUPPLEMENT_RAW_LIMIT]
-    report_chunk = report_text[:SUPPLEMENT_REPORT_LIMIT]
-    prompt = f"""请对比以下「原始语料」与「报告 1.0」，完成补充任务。
+def _api_supplement_chapter(
+    chapter_title: str,
+    chapter_body: str,
+    raw_chunk: str,
+    chapter_idx: int,
+    total_chapters: int,
+) -> str:
+    """对比原始语料与单章内容，补充缺失内容。"""
+    prompt = f"""请对比以下「原始语料片段」与「报告第 {chapter_idx}/{total_chapters} 章」，补充缺失内容。
+
+【本章标题】{chapter_title}
 
 【任务】
-1. 找出原始语料中**尚未出现在报告 1.0 中**的内容（论证、案例、数据、表格、公式等）。
-2. 将缺失内容按主题**补充到报告 1.0 的对应章节**下，保持原有目录结构不变。
-3. 补充时保持原文表述，不编造。若某段内容可归入多个章节，放入最相关的一处。
-4. 若未发现明显缺失，则输出报告原文（可做必要格式整理）。
+1. 找出原始语料中与本章相关、但**尚未出现在本章正文中**的内容（论证、案例、数据、表格、公式等）。
+2. 将缺失内容**补充到本章对应小节**下，保持目录结构不变。
+3. 补充时保持原文表述，不编造。
+4. 若未发现明显缺失，输出原章节内容（可做必要格式整理）。
 
 【要求】
-- 直接输出**完整的更新后报告**，须包含开头的 # 主标题、摘要、关键词及所有章节。
-- 使用 Markdown（# ## ###），表格用 | 呈现。
-- 不要输出「缺失清单」或分析说明，只输出报告全文。
-- 保持章节顺序与结构不变，仅在相应位置插入补充内容。
+- 直接输出本章**完整正文**（以 ## 标题开头），使用 Markdown。
+- 不要输出缺失清单或分析说明。
+- 篇幅只增不减，不要压缩已有内容。
 
 ---
-【原始语料】
-{raw_chunk}
+【原始语料片段】
+{raw_chunk[:SUPPLEMENT_RAW_LIMIT]}
 
 ---
-【报告 1.0】
-{report_chunk}
+【本章正文】
+{chapter_body}
 
 ---
-请输出补充后的完整报告。"""
+请输出补充后的本章完整正文。"""
 
     resp = chat(
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-        max_tokens=32768,
+        max_tokens=16384,
         temperature=0.3,
     )
-    if step_desc:
-        _log(f"完成，耗时 {time.time()-t0:.1f}s，补充后约 {len(resp)} 字")
-    return resp
+    return resp.strip()
 
 
-def _api_deduplicate(report_text: str, step_desc: str = "") -> str:
-    """对报告进行重复内容去重。"""
-    if step_desc:
-        _log(step_desc)
-    t0 = time.time()
-    report_chunk = report_text[:DEDUP_REPORT_LIMIT]
-    prompt = f"""请对以下「报告 1.0」进行**重复内容去重**。
+def _api_deduplicate_chapter(
+    chapter_title: str,
+    chapter_body: str,
+    chapter_idx: int,
+    total_chapters: int,
+) -> str:
+    """对单章进行重复内容去重。"""
+    prompt = f"""请对以下报告第 {chapter_idx}/{total_chapters} 章进行**重复内容去重**。
+
+【本章标题】{chapter_title}
 
 【任务】
-1. 识别报告中**重复表述**、**重复案例**、**重复数据**（同一观点、同一案例、同一表格或数据在文中多次出现）。注意：数学公式（`$...$` / `$$...$$`）不视为重复，须保留。
-2. 合并重复内容：保留一处完整、表述最佳的版本，删除其余重复处。
-3. 保持报告结构、章节顺序、论证逻辑不变。
-4. 去重后语句应通顺，段落衔接自然。
+1. 识别本章中**重复表述**、**重复案例**、**重复数据**。数学公式（`$...$` / `$$...$$` / `\\(...\\)` / `\\[...\\]`）不视为重复，须保留。
+2. 合并重复内容：保留表述最佳的版本，删除其余重复处。
+3. 保持小节结构、论证逻辑不变。
+4. 去重后语句通顺，段落衔接自然。
 
 【要求】
-- 直接输出**去重后的完整报告**，须包含 # 主标题、摘要、关键词及所有章节。
-- 使用 Markdown（# ## ###）。
-- 不要输出去重说明或修改清单，只输出报告全文。
+- 直接输出本章**去重后的完整正文**（以 ## 标题开头），使用 Markdown。
+- 不要输出去重说明，只输出本章正文。
 - 若未发现明显重复，保持原文输出或做少量润色。
 
 ---
-【报告 1.0】
-{report_chunk}
+【本章正文】
+{chapter_body}
 
 ---
-请输出去重后的完整报告。"""
+请输出去重后的本章正文。"""
 
     resp = chat(
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-        max_tokens=32768,
+        max_tokens=16384,
         temperature=0.3,
     )
+    return resp.strip()
+
+
+def _api_supplement_missing(raw_content: str, report_text: str, step_desc: str = "") -> str:
+    """分章并行：对比原始语料与各章，补充缺失内容后合并。"""
+    from src.utils.markdown_utils import parse_report_chapters
+    from src.utils.parallel import parallel_map
+
     if step_desc:
-        _log(f"完成，耗时 {time.time()-t0:.1f}s，去重后约 {len(resp)} 字")
-    return resp
+        _log(step_desc)
+    t0 = time.time()
+
+    header, chapters = parse_report_chapters(report_text)
+    if not chapters:
+        _log("[警告] 无法拆分章节，回退到单次补充")
+        return report_text
+
+    num_chapters = len(chapters)
+    raw_len = len(raw_content)
+
+    def _supplement_one(idx, chapter):
+        ch_title, ch_body = chapter
+        # 按章节比例分配语料片段
+        start = idx * raw_len // num_chapters
+        end = (idx + 1) * raw_len // num_chapters
+        raw_chunk = raw_content[start:end]
+        _log(f"[补充] 第 {idx+1}/{num_chapters} 章: {ch_title[:30]}...")
+        result = _api_supplement_chapter(
+            ch_title, ch_body, raw_chunk, idx + 1, num_chapters,
+        )
+        _log(f"[补充] 第 {idx+1} 章完成，{len(ch_body)}→{len(result)} 字")
+        return result
+
+    revised_parts = parallel_map(_supplement_one, chapters)
+    report_text = f"{header}\n\n" + "\n\n".join(revised_parts)
+
+    if step_desc:
+        _log(f"完成，耗时 {time.time()-t0:.1f}s，补充后约 {len(report_text)} 字")
+    return report_text
+
+
+def _api_deduplicate(report_text: str, step_desc: str = "") -> str:
+    """分章并行：逐章去重后合并。"""
+    from src.utils.markdown_utils import parse_report_chapters
+    from src.utils.parallel import parallel_map
+
+    if step_desc:
+        _log(step_desc)
+    t0 = time.time()
+
+    header, chapters = parse_report_chapters(report_text)
+    if not chapters:
+        _log("[警告] 无法拆分章节，回退到原文")
+        return report_text
+
+    num_chapters = len(chapters)
+
+    def _dedup_one(idx, chapter):
+        ch_title, ch_body = chapter
+        _log(f"[去重] 第 {idx+1}/{num_chapters} 章: {ch_title[:30]}...")
+        result = _api_deduplicate_chapter(
+            ch_title, ch_body, idx + 1, num_chapters,
+        )
+        _log(f"[去重] 第 {idx+1} 章完成，{len(ch_body)}→{len(result)} 字")
+        return result
+
+    revised_parts = parallel_map(_dedup_one, chapters)
+    report_text = f"{header}\n\n" + "\n\n".join(revised_parts)
+
+    if step_desc:
+        _log(f"完成，耗时 {time.time()-t0:.1f}s，去重后约 {len(report_text)} 字")
+    return report_text
 
 
 def _assemble_chapter(

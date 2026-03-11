@@ -94,16 +94,18 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
     except (json.JSONDecodeError, TypeError):
         meta = {"title": "深度调查报告 3.0", "summary": "", "keywords": []}
 
-    # --- 3.2 逐章生成内容
-    chapter_contents = []
+    # --- 3.2 并行生成各章内容
     total_chapters = len(chapters_spec)
+    _log(f"[报告 3.0] Step 2/3: 并行生成 {total_chapters} 章...")
 
-    for i, ch in enumerate(chapters_spec):
+    from src.utils.parallel import parallel_map
+
+    def _gen_chapter(i, ch):
         num = ch.get("num", i + 1)
         title = ch.get("title", f"第{i+1}章")
         scope = ch.get("scope", "")
         cn_num = _CHAPTER_CN[i] if i < len(_CHAPTER_CN) else str(num)
-        print(f"[报告 3.0] Step 2/3: 生成第 {num} 章 / {total_chapters} ...")
+        _log(f"[报告 3.0] 生成第 {num}/{total_chapters} 章: {title}")
         chapter_prompt = f"""请根据以下「ChatGPT 对话原始语料」，**仅**撰写报告中「{title}」这一章的内容。
 
 【本章范围】
@@ -112,7 +114,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
 【硬性要求】
 1. **篇幅充足**：本章应充分展开，涵盖原始语料中与本章相关的全部论述逻辑、案例、表格、公式，不得压缩成寡淡要点；
 2. **保留论述逻辑**：完整还原原始对话中的论证结构、递进关系、因果关系；
-3. **保留关键内容**：表格、案例（如厦门朝宗宫、潮汕大佬、莆田本地人等）、分层设计、公式必须完整纳入；
+3. **保留关键内容**：表格、案例、分层设计、公式必须完整纳入；
 4. **专业语言**：用严谨、简洁的专业语言重写，去除口语化，但保持论证的完整与说服力；
 5. **忠于原文**：所有论点、案例、表格须来自原始语料，不得编造。
 
@@ -124,7 +126,7 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
 - 从 ## {num}.1 开始，不要输出「{cn_num}、」章标题。
 
 【加粗要求】
-对正文中**重要概念、定义、判定结论、关键数据**使用 **加粗** 标出，如：**Web2.8 体系**、**1 元=10 积分**、**双币模型**、**Temple Bond** 等。适度加粗，避免整段加粗。
+对正文中**重要概念、定义、判定结论、关键数据**使用 **加粗** 标出。适度加粗，避免整段加粗。
 
 原始语料：
 ---
@@ -141,10 +143,13 @@ def run_report_v3(raw_path: Path, output_basename: str = None) -> dict:
                 },
                 {"role": "user", "content": chapter_prompt},
             ],
-            max_tokens=10240,
+            max_tokens=16384,
             temperature=0.4,
         )
-        chapter_contents.append((num, title, chapter_text.strip()))
+        _log(f"[报告 3.0] 第 {num} 章完成，约 {len(chapter_text)} 字")
+        return (num, title, chapter_text.strip())
+
+    chapter_contents = parallel_map(_gen_chapter, chapters_spec)
 
     # --- 3.3 合并输出
     _log("[报告 3.0] Step 3/3: 合并报告并导出 Word...")
