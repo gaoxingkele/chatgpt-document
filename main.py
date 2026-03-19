@@ -211,6 +211,8 @@ def cmd_batch(args):
     raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
 
     _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None), getattr(args, "interactive", False))
+    from src.llm_client import print_token_summary
+    print_token_summary()
     _log_banner("批量语料流程完成")
 
 
@@ -359,6 +361,8 @@ def cmd_all(args):
 
     _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None), getattr(args, "interactive", False))
 
+    from src.llm_client import print_token_summary
+    print_token_summary()
     elapsed = time.time() - t_start
     _log_banner(f"全流程完成，总耗时 {elapsed/60:.1f} 分钟")
 
@@ -441,6 +445,8 @@ def cmd_full_report(args):
         run_report_v5(policy_report, base, policy, report_type)
         save_progress(base, REPORT_DIR, "step8")
 
+    from src.llm_client import print_token_summary
+    print_token_summary()
     _log_banner("Step1~Step8 完成，1.0~5.0 已输出至 output/reports")
 
 

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT
+from config import REPORT_DIR, CITATION_CHAPTER_BODY_LIMIT, STEP6_CHAPTER_DELAY
 from src.llm_client import perplexity_chat_with_citations
 from src.utils.markdown_utils import parse_report_chapters as _parse_report_v1_chapters, read_report_text as _read_report_text
 from src.utils.docx_utils import save_docx_safe
@@ -179,7 +179,7 @@ def run_report_v4(
         _log(f"    完成，本章 {n_refs_this_chapter} 个引用")
 
         if idx < num_chapters - 1:
-            time.sleep(1.5)
+            time.sleep(STEP6_CHAPTER_DELAY)
 
     report_v4_body = "\n\n".join(revised_parts)
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
-from config import REPORT_DIR, COMPRESS_SKILL_TEXT_LIMIT, COMPRESS_SUMMARY_TEXT_LIMIT, COMPRESS_DOC_LIMIT
+from config import REPORT_DIR, COMPRESS_SKILL_TEXT_LIMIT, COMPRESS_SUMMARY_TEXT_LIMIT, COMPRESS_DOC_LIMIT, STEP8_ITERATION_DELAY
 from src.llm_client import chat
 from src.report_type_profiles import load_report_type_profile
 from src.utils.markdown_utils import read_report_text as _read_report_text
@@ -151,7 +151,7 @@ def run_report_v5(
         if len(current_doc) < min_final_size:
             _log(f"    已达尺寸下限（{min_final_size} 字），停止")
             break
-        time.sleep(1)
+        time.sleep(STEP8_ITERATION_DELAY)
 
     final_size = len(current_doc)
     _log(f"收敛完成，共 {iteration} 轮，最终约 {final_size} 字（原始 {int(100*final_size/original_size):.0f}%）")

@@ -4,6 +4,7 @@
 通过 LLM_PROVIDER 环境变量或 provider 参数切换。
 """
 import os
+import threading
 
 import src  # noqa: F401  — 确保 PROJECT_ROOT 加入 sys.path
 
@@ -85,6 +86,49 @@ PROVIDER_CONFIG = {
 _OPENAI_COMPATIBLE = ("kimi", "grok", "minimax", "glm", "qwen", "deepseek", "openai", "perplexity")
 
 
+# ============ Token 用量统计 ============
+class _TokenTracker:
+    """线程安全的 token 用量统计。"""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._calls: list[dict] = []
+
+    def record(self, provider: str, model: str, input_tokens: int = 0, output_tokens: int = 0):
+        with self._lock:
+            self._calls.append({
+                "provider": provider, "model": model,
+                "input_tokens": input_tokens, "output_tokens": output_tokens,
+                "ts": _time.time(),
+            })
+
+    def summary(self) -> dict:
+        with self._lock:
+            total_in = sum(c["input_tokens"] for c in self._calls)
+            total_out = sum(c["output_tokens"] for c in self._calls)
+            by_provider: dict[str, dict] = {}
+            for c in self._calls:
+                p = c["provider"]
+                g = by_provider.setdefault(p, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+                g["calls"] += 1
+                g["input_tokens"] += c["input_tokens"]
+                g["output_tokens"] += c["output_tokens"]
+            return {
+                "total_calls": len(self._calls),
+                "total_input_tokens": total_in,
+                "total_output_tokens": total_out,
+                "total_tokens": total_in + total_out,
+                "by_provider": by_provider,
+            }
+
+    def reset(self):
+        with self._lock:
+            self._calls.clear()
+
+
+_tracker = _TokenTracker()
+
+
 def _is_retryable(exc: BaseException) -> bool:
     """判断异常是否值得重试：5xx、429、超时、连接错误。"""
     # httpx 超时与连接错误
@@ -156,6 +200,8 @@ def _openai_compatible_chat(provider: str, messages: list, model: str = None, ma
         max_tokens=max_tokens,
         temperature=temperature,
     )
+    if hasattr(resp, "usage") and resp.usage:
+        _tracker.record(provider, m, resp.usage.prompt_tokens or 0, resp.usage.completion_tokens or 0)
     return (resp.choices[0].message.content or "").strip()
 
 
@@ -190,6 +236,8 @@ def _claude_chat(messages: list, model: str = None, max_tokens: int = 8192, temp
     if system:
         kwargs["system"] = system
     resp = client.messages.create(**kwargs)
+    if hasattr(resp, "usage") and resp.usage:
+        _tracker.record("claude", m, getattr(resp.usage, "input_tokens", 0) or 0, getattr(resp.usage, "output_tokens", 0) or 0)
     return (resp.content[0].text if resp.content else "").strip()
 
 
@@ -228,6 +276,10 @@ def _gemini_chat(messages: list, model: str = None, max_tokens: int = 8192, temp
             temperature=temperature,
         ),
     )
+    if hasattr(resp, "usage_metadata") and resp.usage_metadata:
+        _tracker.record("gemini", m,
+            getattr(resp.usage_metadata, "prompt_token_count", 0) or 0,
+            getattr(resp.usage_metadata, "candidates_token_count", 0) or 0)
     return (resp.text or "").strip()
 
 
@@ -293,6 +345,9 @@ def perplexity_chat_with_citations(
             raise
     resp.raise_for_status()
     data = resp.json()
+    usage = data.get("usage", {})
+    if usage:
+        _tracker.record("perplexity", m, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
     content = ""
     if data.get("choices") and len(data["choices"]) > 0:
         msg = data["choices"][0].get("message", {})
@@ -335,3 +390,24 @@ def chat_vision(
     if p == "gemini":
         return _gemini_chat(messages, model, max_tokens, temperature)
     return _openai_compatible_chat("kimi", messages, model or KIMI_VISION_MODEL, max_tokens, temperature)
+
+
+# ============ Token 统计公开 API ============
+def print_token_summary():
+    """打印 token 用量摘要。"""
+    s = _tracker.summary()
+    if s["total_calls"] == 0:
+        return
+    print(f"\n{'='*60}")
+    print(f"API 调用统计")
+    print(f"{'='*60}")
+    print(f"总调用次数: {s['total_calls']}")
+    print(f"总 Token:    {s['total_tokens']:,} (输入 {s['total_input_tokens']:,} / 输出 {s['total_output_tokens']:,})")
+    for p, g in s["by_provider"].items():
+        print(f"  {p}: {g['calls']} 次, {g['input_tokens']+g['output_tokens']:,} tokens")
+    print(f"{'='*60}\n")
+
+
+def reset_token_tracker():
+    """重置 token 统计。"""
+    _tracker.reset()

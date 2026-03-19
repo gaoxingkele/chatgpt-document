@@ -137,6 +137,10 @@ OUTLINE_REVIEW_RAW_LIMIT = 60_000      # 大纲审阅时语料截取
 # Step3 专家意见仲裁
 ARBITRATE_EXPERT_LIMIT = 50_000        # 仲裁时专家意见截取
 
+# ============ API 调用延迟（秒） ============
+STEP6_CHAPTER_DELAY = float(_env("STEP6_CHAPTER_DELAY", "1.5"))
+STEP8_ITERATION_DELAY = float(_env("STEP8_ITERATION_DELAY", "1"))
+
 # ============ 支持的文件扩展名 ============
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}
 DOCUMENT_EXTENSIONS = {".docx", ".pdf"}
