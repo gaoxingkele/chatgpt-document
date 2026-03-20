@@ -93,6 +93,15 @@ def cmd_merge(args):
     run_corpus_merge(dir_path, args.output, getattr(args, "recursive", False))
 
 
+def cmd_expert_eval(args):
+    """Step3b: 领域自适应专家评估（替代 Step3+Step4）。"""
+    _apply_provider(getattr(args, "provider", None))
+    from src.step3b_expert_eval import run_expert_eval
+    report_path = _resolve_path(args.report, REPORT_DIR)
+    raw_path = _resolve_path(args.raw_file, RAW_DIR) if getattr(args, "raw_file", None) else None
+    run_expert_eval(report_path, args.output_base, raw_path)
+
+
 def cmd_expert_polish(args):
     """Step9: 深度研究专家润色（Perplexity sonar-deep-research）。"""
     from src.step9_expert_polish import run_expert_polish
@@ -672,6 +681,14 @@ def main():
     p8.add_argument("-p", "--policy", default="policy1", help="policy 子目录名")
     _add_report_type_arg(p8)
     p8.set_defaults(func=cmd_report_v5)
+
+    p3b = sub.add_parser("expert-eval", help="Step3b: 领域自适应专家评估（五维度评分+修改意见）")
+    subparsers_map["expert-eval"] = p3b
+    p3b.add_argument("report", help="报告路径（如 _report_v1.md）")
+    p3b.add_argument("-r", "--raw-file", default=None, help="原始语料路径（用于覆盖度评估）")
+    p3b.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    _add_provider_arg(p3b)
+    p3b.set_defaults(func=cmd_expert_eval)
 
     p9 = sub.add_parser("expert-polish", help="Step9: 深度研究专家润色（Perplexity deep research，3 位专家）")
     subparsers_map["expert-polish"] = p9

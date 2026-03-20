@@ -34,6 +34,42 @@ from src.prompts import REPORT_WRITER_PROMPT as SYSTEM_PROMPT
 MAX_WORKERS = 4
 
 
+def _merge_duplicate_chapters(report_text: str) -> str:
+    """合并补充/去重后产生的同名 ## 章节。"""
+    from src.utils.markdown_utils import parse_report_chapters
+
+    header, chapters = parse_report_chapters(report_text)
+    if len(chapters) <= 1:
+        return report_text
+
+    # 提取顶层标题关键字（去掉序号）
+    def _norm(title: str) -> str:
+        t = title.strip().lstrip("#").strip()
+        t = re.sub(r"^[一二三四五六七八九十]+[、．,]\s*", "", t)
+        t = re.sub(r"^\d+[.、]\s*", "", t)
+        return t.strip()
+
+    merged_parts = []
+    i = 0
+    while i < len(chapters):
+        current_key = _norm(chapters[i][0])
+        title = chapters[i][0]
+        body = chapters[i][1]
+        j = i + 1
+        while j < len(chapters) and _norm(chapters[j][0]) == current_key:
+            body += "\n\n" + chapters[j][1]
+            j += 1
+        merged_parts.append(f"## {title}\n\n{body}" if not body.strip().startswith("##") else f"## {title}\n\n{body}")
+        i = j
+
+    before = len(chapters)
+    after = len(merged_parts)
+    if before != after:
+        _log(f"  同名章节合并: {before} → {after}")
+
+    return f"{header}\n\n" + "\n\n".join(merged_parts)
+
+
 def _api_build_outline(content: str, template_constraints: str = "") -> dict:
     """调用 API 分析语料，构建文档大纲。≤7 章，最多三级目录。"""
     prompt = """请分析以下「原始对话语料」的整体内容，构建一份文档大纲。
@@ -598,6 +634,9 @@ def run_meta_and_report_v1(raw_path: Path, output_basename: str = None, report_t
         report_v1_text,
         step_desc="去重：合并重复表述、案例、数据"
     )
+
+    # --- 7. 合并同名章节（补充/去重可能产生重复 ## 标题）
+    report_v1_text = _merge_duplicate_chapters(report_v1_text)
 
     report_v1_path = REPORT_DIR / f"{base}_report_v1.md"
     report_v1_path.write_text(report_v1_text, encoding="utf-8")
