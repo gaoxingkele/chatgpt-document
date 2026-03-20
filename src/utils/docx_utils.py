@@ -245,6 +245,27 @@ def _add_md_table(doc, table_lines: list) -> None:
     doc.add_paragraph()
 
 
+# --------------- 图表渲染 ---------------
+
+def _try_render_chart(doc, chart_json_text: str) -> None:
+    """尝试将 chart-json 渲染为 PNG 并嵌入 DOCX。失败时降级为代码块。"""
+    try:
+        from src.utils.chart_render import render_chart_from_json
+        import io
+        png_bytes = render_chart_from_json(chart_json_text)
+        if png_bytes:
+            stream = io.BytesIO(png_bytes)
+            doc.add_picture(stream, width=Inches(5.5))
+            # 居中
+            last_paragraph = doc.paragraphs[-1]
+            last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            return
+    except Exception:
+        pass
+    # 降级：显示为代码块
+    _add_code_block(doc, chart_json_text.split("\n"))
+
+
 # --------------- 代码块 ---------------
 
 def _add_code_block(doc, code_lines: list[str]) -> None:
@@ -489,6 +510,7 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
 
         # 代码块 ```
         if stripped.startswith("```"):
+            lang_hint = stripped[3:].strip().lower()
             i += 1
             code_lines = []
             while i < len(lines) and not lines[i].strip().startswith("```"):
@@ -496,7 +518,14 @@ def md_to_docx(md_text: str, docx_path: Path) -> None:
                 i += 1
             if i < len(lines):
                 i += 1  # 跳过结束 ```
-            _add_code_block(doc, code_lines)
+            # chart-json: Plotly 图表渲染为图片嵌入
+            if lang_hint in ("chart-json", "chart"):
+                _try_render_chart(doc, "\n".join(code_lines))
+            elif lang_hint == "mermaid":
+                # Mermaid 暂不渲染，显示为代码块
+                _add_code_block(doc, code_lines)
+            else:
+                _add_code_block(doc, code_lines)
             continue
 
         # 水平线 --- / *** / ___

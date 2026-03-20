@@ -505,9 +505,14 @@ def cmd_full_report(args):
     else:
         raise FileNotFoundError(f"输入不存在: {input_path}")
 
-    # Step2~Step5: 共享 pipeline（带断点续跑）
+    # Step2~Step5: 选择管线模式
+    use_eval_driven = getattr(args, "eval_driven", False)
     if should_skip_step(progress, "standard_pipeline"):
         _log_step("跳过 Step2~Step5（已完成）")
+    elif use_eval_driven:
+        _log_step("评估驱动管线: Step2 → Step3b → Step5（迭代）→ Step4b")
+        _run_eval_driven_pipeline(raw_path, base, getattr(args, "style", "A"), report_type)
+        save_progress(base, REPORT_DIR, "standard_pipeline")
     else:
         _run_standard_pipeline(raw_path, base, getattr(args, "style", "A"), report_type, getattr(args, "interactive", False))
         save_progress(base, REPORT_DIR, "standard_pipeline")
@@ -799,6 +804,7 @@ def main():
     _add_report_type_arg(pfr)
     pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C", "D"], help="报告3.0风格(A=商业/B=可行性/C=学术/D=政治评论)")
     pfr.add_argument("--no-resume", action="store_true", help="禁用断点续跑，强制从头执行")
+    pfr.add_argument("--eval-driven", action="store_true", help="评估驱动管线: Step3b评估→Step5改写（跳过Step3+Step4，质量闭环迭代）")
     pfr.add_argument("--deep-research", action="store_true", help="启用 Step9 深度研究专家润色（Perplexity）")
     pfr.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_lang_arg(pfr)
