@@ -103,10 +103,33 @@ def cmd_expert_eval(args):
 
 
 def cmd_expert_polish(args):
-    """Step9: 深度研究专家润色（Perplexity sonar-deep-research）。"""
+    """Step9: 深度研究专家润色。"""
     from src.step9_expert_polish import run_expert_polish
     report_path = _resolve_path(args.report, REPORT_DIR)
-    run_expert_polish(report_path, args.output_base)
+    run_expert_polish(
+        report_path,
+        args.output_base,
+        deep=getattr(args, "deep", False),
+        search_provider=getattr(args, "search_provider", "perplexity"),
+    )
+
+
+def cmd_deep_research(args):
+    """独立深度研究：对任意主题执行多轮搜索研究。"""
+    from src.research.deep_researcher import run_deep_research, format_report_markdown
+    from config import REPORT_DIR
+    report = run_deep_research(
+        topic=args.topic,
+        search_provider=getattr(args, "search_provider", "perplexity"),
+        max_questions=getattr(args, "max_questions", 5),
+        max_iterations=getattr(args, "max_iterations", 2),
+    )
+    md = format_report_markdown(report)
+    out_name = getattr(args, "output", None) or "deep_research"
+    out_path = REPORT_DIR / f"{out_name}.md"
+    out_path.write_text(md, encoding="utf-8")
+    print(f"\n研究报告已保存: {out_path}")
+    print(f"  搜索: {report.total_searches} 次 | 来源: {len(report.all_citations)} 个 | 耗时: {report.elapsed_seconds:.1f}s")
 
 
 def cmd_preprocess(args):
@@ -690,11 +713,22 @@ def main():
     _add_provider_arg(p3b)
     p3b.set_defaults(func=cmd_expert_eval)
 
-    p9 = sub.add_parser("expert-polish", help="Step9: 深度研究专家润色（Perplexity deep research，3 位专家）")
+    p9 = sub.add_parser("expert-polish", help="Step9: 专家润色（默认 Perplexity 直连，--deep 启用深度研究）")
     subparsers_map["expert-polish"] = p9
     p9.add_argument("report", help="最终报告路径（如 Step7/Step8 输出）")
     p9.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    p9.add_argument("--deep", action="store_true", help="启用深度研究模式（多轮搜索+综合）")
+    p9.add_argument("--search-provider", default="perplexity", choices=["perplexity", "grok", "gemini"], help="深度研究搜索源")
     p9.set_defaults(func=cmd_expert_polish)
+
+    pdr = sub.add_parser("deep-research", help="独立深度研究：对任意主题执行多轮搜索研究")
+    subparsers_map["deep-research"] = pdr
+    pdr.add_argument("topic", help="研究主题")
+    pdr.add_argument("-o", "--output", default=None, help="输出文件名前缀")
+    pdr.add_argument("--search-provider", default="perplexity", choices=["perplexity", "grok", "gemini"], help="搜索源")
+    pdr.add_argument("--max-questions", type=int, default=5, help="最大子问题数")
+    pdr.add_argument("--max-iterations", type=int, default=2, help="最大迭代轮次")
+    pdr.set_defaults(func=cmd_deep_research)
 
     p0 = sub.add_parser("all", help="全流程：导入/抓取 → 报告1.0 → 专家 → 报告2.0 → 报告3.0")
     subparsers_map["all"] = p0

@@ -16,6 +16,7 @@ import src  # noqa: F401
 
 from config import REPORT_DIR
 from src.llm_client import perplexity_chat_with_citations, chat
+from src.research.deep_researcher import run_deep_research, format_report_markdown
 from src.utils.markdown_utils import parse_report_chapters as _parse_chapters, read_report_text as _read_report_text
 from src.utils.docx_utils import save_docx_safe
 from src.utils.log import log as _log
@@ -199,6 +200,8 @@ def _merge_research_into_chapter(
 def run_expert_polish(
     report_path: Path,
     output_basename: str = None,
+    deep: bool = False,
+    search_provider: str = "perplexity",
 ) -> dict:
     """
     Step9：对最终报告进行深度研究专家润色。
@@ -238,17 +241,51 @@ def run_expert_polish(
     _log("=" * 60)
     t0 = time.time()
 
-    # ========== Phase 1: 整篇深度研究（1 次调用） ==========
-    _log("Phase 1: 整篇报告 → Perplexity Deep Research（三角度分析）")
-
-    # 截取报告摘要（取每章前 1200 字，总计控制在 8000 字内）
+    # ========== Phase 1: 研究 ==========
+    # 截取报告摘要
     report_digest = ""
     per_chapter_limit = min(1200, 8000 // max(num_chapters, 1))
     for ch_title, ch_body in chapters:
         report_digest += f"\n\n## {ch_title}\n{ch_body[:per_chapter_limit]}"
     report_digest = report_digest[:8000]
 
-    research_prompt = f"""请对以下政治评论研究报告进行深度搜索研究，从三个角度给出分析：
+    research_content = ""
+    research_citations = []
+    t1 = time.time()
+
+    if deep:
+        # ---- 深度研究模式：GPT-Researcher 替代方案 ----
+        _log(f"Phase 1: 深度研究模式（{search_provider}，多轮搜索+综合）")
+        research_topic = f"""对以下报告进行三角度深度研究：
+A. 事实验证与数据增补：核查关键事实、补充遗漏数据和最新进展
+B. 政策背景与学术深化：搜索政策文件、智库报告、学术论文
+C. 对立观点与平衡性：搜索对立证据、替代解释、争议标注
+
+报告摘要：
+{report_digest[:4000]}"""
+
+        report_obj = run_deep_research(
+            topic=research_topic,
+            context=report_digest,
+            search_provider=search_provider,
+            max_questions=5,
+            max_iterations=2,
+            search_delay=5.0,
+        )
+        research_content = report_obj.synthesis
+        research_citations = report_obj.all_citations
+        _log(f"Phase 1 完成，{report_obj.total_searches} 次搜索，{len(research_citations)} 个来源，{time.time()-t1:.1f}s")
+
+        # 保存完整研究报告
+        from config import EXPERT_DIR
+        research_md = format_report_markdown(report_obj)
+        research_path = EXPERT_DIR / f"{base}_Step9_深度研究报告.md"
+        research_path.write_text(research_md, encoding="utf-8")
+        _log(f"  深度研究报告已保存: {research_path.name}")
+    else:
+        # ---- 简单模式：Perplexity 直连（1 次调用） ----
+        _log("Phase 1: Perplexity 直连（三角度分析）")
+        research_prompt = f"""请对以下报告进行深度搜索研究，从三个角度给出分析：
 
 ## 角度 A：事实验证与数据增补
 - 核查报告中所有关键事实、数据、人物、时间线
@@ -270,15 +307,13 @@ def run_expert_polish(
 【报告内容】
 {report_digest}"""
 
-    research_content = ""
-    research_citations = []
-    t1 = time.time()
     max_retries = 3
-    for attempt in range(1, max_retries + 1):
+    if not deep:
+      for attempt in range(1, max_retries + 1):
         try:
             research_content, research_citations = perplexity_chat_with_citations(
                 [
-                    {"role": "system", "content": "你是一位资深政治分析研究员，擅长多角度深度研究。请搜索大量相关资料，给出有据可查的研究发现。"},
+                    {"role": "system", "content": "你是一位资深研究员，擅长多角度深度研究。请搜索大量相关资料，给出有据可查的研究发现。"},
                     {"role": "user", "content": research_prompt},
                 ],
                 model="sonar-pro",
