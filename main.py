@@ -175,6 +175,40 @@ def _add_report_type_arg(parser: argparse.ArgumentParser):
     )
 
 
+def _run_eval_driven_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None, target_score: int = 70, max_rounds: int = 2):
+    """评估驱动管线：Step2 → Step3b → Step5（迭代直到达标）→ Step4b。"""
+    from src.step2_report_v1 import run_meta_and_report_v1
+    from src.step3b_expert_eval import run_expert_eval
+    from src.step5_report_final import run_report_final
+
+    _log_step("Step2 报告 1.0")
+    r1 = run_meta_and_report_v1(raw_path, base, report_type)
+    current_report = Path(r1["report_v1_path"])
+
+    for round_num in range(1, max_rounds + 1):
+        _log_step(f"Step3b 评估（第 {round_num} 轮）")
+        eval_result = run_expert_eval(current_report, base, raw_path, report_type)
+        score = eval_result["eval_result"].get("overall_score", 0)
+        _log_step(f"评分: {score}/100（目标 {target_score}）")
+
+        dims = eval_result["eval_result"].get("dimensions", {})
+        all_above_60 = all(d.get("score", 0) >= 60 for d in dims.values())
+
+        if score >= target_score and all_above_60:
+            _log_step(f"达标（{score} ≥ {target_score}），跳过改写")
+            break
+
+        _log_step(f"Step5 评估驱动改写（第 {round_num} 轮）")
+        r3 = run_report_final(current_report, base, style, raw_path)
+        current_report = Path(r3["report_v3_path"])
+
+    _log_step("Step4b 全文一致性校验")
+    from src.step4b_consistency_check import run_consistency_check
+    run_consistency_check(current_report, raw_path, base)
+
+    return current_report
+
+
 def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None, interactive: bool = False):
     """共享 pipeline：1.0 → 专家 → 2.0 → 3.0 最终版。由 cmd_batch/cmd_all 调用。"""
     # 报告类型可指定默认风格，覆盖 CLI 默认值 A

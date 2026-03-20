@@ -56,6 +56,18 @@ STYLE_PROMPTS = {
 
 
 from src.utils.log import log as _log
+from src.utils.prompt_loader import load_common_rules
+
+
+# 加载公共规范（Mermaid + 表格 + 语言）
+_COMMON_RULES = ""
+
+
+def _get_common_rules() -> str:
+    global _COMMON_RULES
+    if not _COMMON_RULES:
+        _COMMON_RULES = load_common_rules()
+    return _COMMON_RULES
 
 
 def _merge_same_title_chapters(
@@ -173,6 +185,11 @@ def _api_convert_chapter_to_prose(
 
     prompt += f"""
 请直接输出改写后的完整章节，以 `## {chapter_title}` 开头，使用 Markdown（### 等）。不要 JSON 或多余说明。"""
+
+    # 注入公共规范
+    common_rules = _get_common_rules()
+    if common_rules:
+        prompt += f"\n\n【写作规范（必须遵守）】\n{common_rules[:3000]}\n"
 
     system_content = "你是专业的文档改写专家。核心任务：将列表式、大纲式内容改写为自然流畅的叙述文体，同时保持信息完整、逻辑清晰。"
     if raw_chunk:

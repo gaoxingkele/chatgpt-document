@@ -184,122 +184,219 @@ def _search_domain_sota(domain: str, key_concepts: list[str], report_preview: st
         return ""
 
 
+def _evaluate_single_dimension(
+    dim_key: str,
+    dim: dict,
+    report_text: str,
+    raw_text: str,
+    expert_persona: str,
+    rubric_text: str,
+    sota_knowledge: str,
+) -> dict:
+    """评估单个维度，返回 {score, assessment, issues}。"""
+    focus_items = "\n".join(f"- {f}" for f in dim["focus"])
+
+    rubric_section = ""
+    if rubric_text:
+        # 从 rubric 中提取该维度的标准
+        import re
+        pattern = rf"## {dim['name']}.*?(?=## |\Z)"
+        match = re.search(pattern, rubric_text, re.DOTALL)
+        if match:
+            rubric_section = f"\n【评分标准】\n{match.group(0).strip()}\n"
+
+    raw_section = ""
+    if dim_key == "corpus_coverage" and raw_text:
+        raw_section = f"\n【原始语料摘要（用于覆盖度比对）】\n{raw_text[:15000]}\n"
+
+    sota_section = ""
+    if sota_knowledge and dim_key in ("corpus_coverage", "internal_logic"):
+        sota_section = f"\n【领域 SOTA 知识】\n{sota_knowledge[:3000]}\n"
+
+    prompt = f"""请**仅**评估以下报告的「{dim['name']}」维度。
+
+{dim['description']}
+
+评估要点：
+{focus_items}
+{rubric_section}{raw_section}{sota_section}
+
+【报告全文】
+{report_text[:50000]}
+
+【输出格式】严格输出 JSON：
+{{
+  "score": 0-100,
+  "assessment": "100字评价，具体指出优缺点",
+  "issues": [
+    {{"location": "章节/段落位置", "problem": "具体问题", "suggestion": "修改建议", "severity": "高/中/低"}}
+  ]
+}}
+
+请按以下步骤评估（Chain-of-Thought）：
+1. 通读全文，列出与该维度相关的优点
+2. 逐章检查，列出该维度的具体问题
+3. 根据问题数量和严重程度给分
+4. 输出 JSON
+
+直接输出 JSON，不要代码块。"""
+
+    resp = chat(
+        [
+            {"role": "system", "content": expert_persona + f"\n\n你当前只评估「{dim['name']}」这一个维度，请深入、具体。"},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=2048,
+        temperature=0.2,
+        reasoning=True,
+    )
+
+    try:
+        from src.utils.file_utils import clean_json
+        return json.loads(clean_json(resp))
+    except (json.JSONDecodeError, Exception):
+        return {"score": -1, "assessment": resp[:200], "issues": []}
+
+
+def _verify_key_facts(report_text: str, domain: str) -> tuple[list, list]:
+    """
+    Chain-of-Verification：提取关键事实断言并用 Perplexity 验证。
+    返回 (hallucinations, verified_facts)。
+    """
+    # Step 1: 提取关键事实断言
+    _log("  Chain-of-Verification: 提取关键事实...")
+    extract_resp = chat(
+        [
+            {"role": "system", "content": "从报告中提取所有可验证的事实断言（具体数据、日期、人物、事件）。"},
+            {"role": "user", "content": f"提取以下报告中的关键事实断言（最多 10 条），每行一条：\n\n{report_text[:30000]}"},
+        ],
+        max_tokens=1024,
+        temperature=0.2,
+    )
+    facts = [f.strip().lstrip("0123456789.-) ") for f in extract_resp.strip().split("\n") if f.strip() and len(f.strip()) > 15][:10]
+
+    if not facts:
+        return [], []
+
+    # Step 2: Perplexity 验证
+    _log(f"  Chain-of-Verification: 验证 {len(facts)} 条事实...")
+    verify_prompt = f"""请验证以下关于{domain}的事实断言，逐条标注：
+- ✅ 已验证（附来源）
+- ⚠️ 部分准确（说明差异）
+- ❌ 无法验证或与事实不符
+
+事实断言：
+""" + "\n".join(f"{i+1}. {f}" for i, f in enumerate(facts))
+
+    try:
+        verify_resp, _ = perplexity_chat_with_citations(
+            [
+                {"role": "system", "content": f"你是{domain}事实核查专家。逐条验证事实断言。"},
+                {"role": "user", "content": verify_prompt},
+            ],
+            model="sonar-pro",
+            max_tokens=4096,
+            temperature=0.2,
+        )
+    except Exception as e:
+        _log(f"  事实验证失败: {e}")
+        return [], facts
+
+    # 解析结果
+    hallucinations = []
+    for line in verify_resp.split("\n"):
+        if "❌" in line:
+            hallucinations.append(line.strip())
+
+    verified_count = verify_resp.count("✅")
+    _log(f"  验证结果: {verified_count} 条已验证, {len(hallucinations)} 条存疑")
+    return hallucinations, facts
+
+
 def _evaluate_report(
     report_text: str,
     raw_text: str,
     expert_persona: str,
     domain: str,
     sota_knowledge: str,
+    policy_name: str = "",
 ) -> dict:
     """
-    五维度精准评估，返回结构化评估结果。
+    五维度并行评估 + Chain-of-Verification，返回结构化评估结果。
     """
-    dimensions_desc = ""
-    for dim_key, dim in EVAL_DIMENSIONS.items():
-        focus_items = "\n".join(f"    - {f}" for f in dim["focus"])
-        dimensions_desc += f"""
-### {dim['name']}（{dim_key}）
-{dim['description']}
-评估要点：
-{focus_items}
-"""
+    from src.utils.parallel import parallel_map
+    from src.utils.prompt_loader import load_evaluation_rubric
 
-    sota_section = ""
-    if sota_knowledge:
-        sota_section = f"""
-【领域 SOTA 知识（评估基准）】
-{sota_knowledge[:5000]}
-"""
+    # 加载领域 rubric
+    rubric_text = load_evaluation_rubric(policy_name) if policy_name else ""
+    if rubric_text:
+        _log(f"  已加载评分标准: {policy_name}/evaluation_rubric.md")
 
-    raw_section = ""
-    if raw_text:
-        raw_section = f"""
-【原始语料摘要（用于覆盖度评估）】
-{raw_text[:15000]}
-"""
-
-    prompt = f"""请对以下报告进行**五维度精准评估**。
-
-{sota_section}
-{raw_section}
-
-【评估维度】
-{dimensions_desc}
-
-【报告全文】
-{report_text[:60000]}
-
-【输出格式】严格输出以下 JSON：
-{{
-  "domain": "{domain}",
-  "overall_score": 0-100,
-  "overall_assessment": "200字总体评价",
-  "dimensions": {{
-    "text_quality": {{
-      "score": 0-100,
-      "assessment": "100字评价",
-      "issues": [
-        {{"location": "章节/段落位置", "problem": "具体问题", "suggestion": "修改建议", "severity": "高/中/低"}}
-      ]
-    }},
-    "corpus_coverage": {{
-      "score": 0-100,
-      "assessment": "100字评价",
-      "issues": [...]
-    }},
-    "internal_logic": {{
-      "score": 0-100,
-      "assessment": "100字评价",
-      "issues": [...]
-    }},
-    "chapter_progression": {{
-      "score": 0-100,
-      "assessment": "100字评价",
-      "issues": [...]
-    }},
-    "focus_emphasis": {{
-      "score": 0-100,
-      "assessment": "100字评价",
-      "issues": [...]
-    }}
-  }},
-  "top_issues": [
-    {{"dimension": "维度名", "location": "位置", "problem": "问题", "suggestion": "修改建议", "severity": "高"}}
-  ],
-  "hallucinations": ["疑似幻觉内容1", "疑似幻觉内容2"],
-  "missing_topics": ["遗漏的重要主题1", "遗漏的重要主题2"]
-}}
-
-要求：
-1. 评分标准：90+ 优秀，80-89 良好，70-79 中等，60-69 及格，<60 不合格
-2. issues 只列有价值的具体问题（每维度最多 5 条），不要泛泛而谈
-3. top_issues 列出全文最需优先修改的 5-10 个问题（按严重程度排序）
-4. hallucinations 列出报告中疑似编造的内容（与原始语料不符的事实）
-5. missing_topics 列出原始语料中有但报告中遗漏的重要主题
-
-直接输出 JSON，不要代码块。"""
-
-    _log("  五维度评估中（reasoning 模型）...")
+    # 并行评估 5 个维度
+    dim_items = list(EVAL_DIMENSIONS.items())
+    _log(f"  五维度并行评估中（{len(dim_items)} 个 reasoning 调用）...")
     t0 = time.time()
-    resp = chat(
-        [
-            {"role": "system", "content": expert_persona},
-            {"role": "user", "content": prompt},
-        ],
-        max_tokens=8192,
-        temperature=0.2,
-        reasoning=True,
-    )
-    _log(f"  评估完成，耗时 {time.time()-t0:.1f}s")
 
-    try:
-        from src.utils.file_utils import clean_json
-        result = json.loads(clean_json(resp))
-    except (json.JSONDecodeError, Exception):
-        _log("  [警告] 评估 JSON 解析失败，保存原始响应")
-        result = {"raw_response": resp, "overall_score": -1}
+    def _eval_one(idx, item):
+        dim_key, dim = item
+        _log(f"    [{idx+1}/5] 评估: {dim['name']}...")
+        result = _evaluate_single_dimension(
+            dim_key, dim, report_text, raw_text, expert_persona, rubric_text, sota_knowledge,
+        )
+        _log(f"    [{idx+1}/5] {dim['name']}: {result.get('score', '?')}/100")
+        return dim_key, result
 
-    return result
+    eval_results = parallel_map(_eval_one, dim_items)
+
+    dimensions = {}
+    for dim_key, result in eval_results:
+        dimensions[dim_key] = result
+
+    _log(f"  五维度评估完成，耗时 {time.time()-t0:.1f}s")
+
+    # Chain-of-Verification
+    cov_hallucinations, _ = _verify_key_facts(report_text, domain)
+
+    # 汇总
+    scores = [d.get("score", 0) for d in dimensions.values() if d.get("score", -1) >= 0]
+    overall_score = int(sum(scores) / len(scores)) if scores else -1
+
+    # 收集 top issues
+    top_issues = []
+    for dim_key, dim_result in dimensions.items():
+        for issue in dim_result.get("issues", []):
+            issue["dimension"] = dim_key
+            top_issues.append(issue)
+    top_issues.sort(key=lambda x: {"高": 0, "中": 1, "低": 2}.get(x.get("severity", "低"), 2))
+    top_issues = top_issues[:10]
+
+    # 合并幻觉（维度评估 + CoV）
+    hallucinations = cov_hallucinations
+    for dim_result in dimensions.values():
+        for issue in dim_result.get("issues", []):
+            if "幻觉" in issue.get("problem", "") or "编造" in issue.get("problem", ""):
+                hallucinations.append(issue.get("problem", ""))
+
+    # 遗漏主题
+    missing_topics = []
+    coverage = dimensions.get("corpus_coverage", {})
+    for issue in coverage.get("issues", []):
+        if "遗漏" in issue.get("problem", "") or "缺失" in issue.get("problem", ""):
+            missing_topics.append(issue.get("problem", ""))
+
+    # 总评
+    assessments = [f"{k}: {v.get('assessment', '')}" for k, v in dimensions.items()]
+    overall_assessment = f"总分 {overall_score}/100。" + " ".join(assessments)[:200]
+
+    return {
+        "domain": domain,
+        "overall_score": overall_score,
+        "overall_assessment": overall_assessment,
+        "dimensions": dimensions,
+        "top_issues": top_issues,
+        "hallucinations": hallucinations,
+        "missing_topics": missing_topics,
+    }
 
 
 def _save_evaluation_report(base: str, eval_result: dict, domain: str, sota_knowledge: str) -> Path:
@@ -378,6 +475,7 @@ def run_expert_eval(
     raw_path: Path = None,
     report_type: str = None,
 ) -> dict:
+    """注意：report_type 用于加载对应的 evaluation_rubric.md"""
     """
     Step3b: 领域自适应专家评估。
 
@@ -422,9 +520,19 @@ def run_expert_eval(
     # 2. SOTA 知识搜索
     sota_knowledge = _search_domain_sota(domain, key_concepts, report_text)
 
-    # 3. 五维度评估
+    # 推断 policy_name
+    policy_name = ""
+    if report_type:
+        try:
+            from src.report_type_profiles import load_report_type_profile
+            profile = load_report_type_profile(report_type)
+            policy_name = profile.get("policy_name", "")
+        except Exception:
+            pass
+
+    # 3. 五维度并行评估 + Chain-of-Verification
     eval_result = _evaluate_report(
-        report_text, raw_text, expert_persona, domain, sota_knowledge,
+        report_text, raw_text, expert_persona, domain, sota_knowledge, policy_name,
     )
 
     # 4. 保存评估报告
