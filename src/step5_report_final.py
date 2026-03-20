@@ -42,6 +42,16 @@ STYLE_PROMPTS = {
 - 强调概念界定、理论框架、研究进展与展望
 - 保留全部参数、表格、数据与数学公式（`$...$` / `$$...$$` 原样保留），用段落自然串联""",
     },
+    "D": {
+        "name": "政治评论分析报告",
+        "desc": """本报告为**政治评论分析报告**。要求：
+- 面向政策研究者、决策参考、智库读者，突出事实梳理与多视角分析
+- 语气冷静、审慎、证据导向，避免动员式或煽情表达
+- 严格区分事实陈述与价值判断，对争议性结论给出替代解释与不确定性提示
+- 多用「据报道」「有分析认为」「值得注意的是」「尚存争议」等审慎表述
+- 强调时间线梳理、利益相关方分析、政策因果链、地缘博弈逻辑
+- 保留全部参数、表格、数据与数学公式（`$...$` / `$$...$$` 原样保留），用段落自然串联""",
+    },
 }
 
 
@@ -135,7 +145,7 @@ def run_report_final(
 
     style_upper = style.upper()
     if style_upper not in STYLE_PROMPTS:
-        raise ValueError(f"风格须为 A/B/C 之一，当前: {style}")
+        raise ValueError(f"风格须为 A/B/C/D 之一，当前: {style}")
     style_info = STYLE_PROMPTS[style_upper]
 
     base = output_basename or report_v2_path.stem.replace("_report_v2", "").replace("_report_v2_new", "")

@@ -87,6 +87,7 @@ def _api_build_outline(content: str, template_constraints: str = "") -> dict:
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
         max_tokens=8192,
         temperature=0.3,
+        reasoning=True,
     )
     _log(f"API#1 完成，耗时 {time.time()-t0:.1f}s，响应约 {len(resp)} 字", "1")
     text = _clean_json(resp)
@@ -160,6 +161,7 @@ def _api_review_outline(outline_json: dict, content: str) -> dict:
         [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
         max_tokens=8192,
         temperature=0.3,
+        reasoning=True,
     )
     _log(f"API#1b 大纲审阅完成，耗时 {time.time()-t0:.1f}s", "1b")
     text = _clean_json(resp)

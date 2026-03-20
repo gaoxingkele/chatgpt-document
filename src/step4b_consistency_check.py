@@ -61,6 +61,7 @@ def _api_check_consistency(report_text: str, raw_summary: str) -> str:
         ],
         max_tokens=8192,
         temperature=0.3,
+        reasoning=True,
     )
     _log(f"一致性校验完成，耗时 {time.time()-t0:.1f}s", "consistency")
     return resp

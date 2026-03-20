@@ -93,6 +93,24 @@ def cmd_merge(args):
     run_corpus_merge(dir_path, args.output, getattr(args, "recursive", False))
 
 
+def cmd_expert_polish(args):
+    """Step9: 深度研究专家润色（Perplexity sonar-deep-research）。"""
+    from src.step9_expert_polish import run_expert_polish
+    report_path = _resolve_path(args.report, REPORT_DIR)
+    run_expert_polish(report_path, args.output_base)
+
+
+def cmd_preprocess(args):
+    """Step0b: 本地语料预处理（去重/过滤/压缩），零 API 调用。"""
+    from src.step0b_preprocess import run_preprocess
+    dir_path = Path(args.dir)
+    if not dir_path.is_absolute():
+        dir_path = Path.cwd() / dir_path
+    base = args.output or dir_path.name
+    mode = getattr(args, "mode", "A")
+    run_preprocess(dir_path, base, mode, getattr(args, "recursive", False))
+
+
 def _apply_provider(provider: str):
     """命令行指定 Provider 时覆盖环境变量。"""
     if provider:
@@ -127,6 +145,10 @@ def _add_report_type_arg(parser: argparse.ArgumentParser):
 
 def _run_standard_pipeline(raw_path: Path, base: str, style: str = "A", report_type: str = None, interactive: bool = False):
     """共享 pipeline：1.0 → 专家 → 2.0 → 3.0 最终版。由 cmd_batch/cmd_all 调用。"""
+    # 报告类型可指定默认风格，覆盖 CLI 默认值 A
+    if report_type and style == "A":
+        profile = load_report_type_profile(report_type)
+        style = profile.get("default_style", style)
     from src.step2_report_v1 import run_meta_and_report_v1
 
     _log_step("Step2 报告 1.0")
@@ -198,7 +220,6 @@ def cmd_batch(args):
     """Step0 语料重整 + 全流程：读取目录语料 → 去重排序 → 1.0 → 专家 → 2.0 → 3.0"""
     _apply_provider(getattr(args, "provider", None))
     _apply_lang(getattr(args, "lang", None))
-    from src.step0_corpus_merge import run_corpus_merge
     dir_path = Path(args.dir)
     if not dir_path.is_absolute():
         dir_path = Path.cwd() / dir_path
@@ -207,8 +228,15 @@ def cmd_batch(args):
     _log_banner("批量语料流程开始")
     print(f"  目录: {dir_path}", flush=True)
 
-    _log_step("Step0 语料重整")
-    raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
+    if getattr(args, "preprocess", False):
+        from src.step0b_preprocess import run_preprocess
+        mode = getattr(args, "preprocess_mode", "A")
+        _log_step(f"Step0b 本地预处理 (Mode {mode})")
+        raw_path = run_preprocess(dir_path, base, mode, getattr(args, "recursive", False))
+    else:
+        from src.step0_corpus_merge import run_corpus_merge
+        _log_step("Step0 语料重整")
+        raw_path = run_corpus_merge(dir_path, base, getattr(args, "recursive", False))
 
     _run_standard_pipeline(raw_path, base, getattr(args, "final_style", "A"), getattr(args, "report_type", None), getattr(args, "interactive", False))
     from src.llm_client import print_token_summary
@@ -384,8 +412,14 @@ def cmd_full_report(args):
     progress = {} if no_resume else load_progress(base, REPORT_DIR)
 
     if input_path.is_dir():
-        from src.step0_corpus_merge import run_corpus_merge
-        raw_path = run_corpus_merge(input_path, base, getattr(args, "recursive", True))
+        if getattr(args, "preprocess", False):
+            from src.step0b_preprocess import run_preprocess
+            preprocess_mode = getattr(args, "preprocess_mode", "A")
+            _log_step(f"Step0b 本地预处理 (Mode {preprocess_mode})")
+            raw_path = run_preprocess(input_path, base, preprocess_mode, getattr(args, "recursive", True))
+        else:
+            from src.step0_corpus_merge import run_corpus_merge
+            raw_path = run_corpus_merge(input_path, base, getattr(args, "recursive", True))
     elif input_path.is_file():
         import shutil
         raw_path = RAW_DIR / f"{base}.txt"
@@ -445,9 +479,24 @@ def cmd_full_report(args):
         run_report_v5(policy_report, base, policy, report_type)
         save_progress(base, REPORT_DIR, "step8")
 
+    # Step9（可选）: 深度研究专家润色
+    if getattr(args, "deep_research", False):
+        if should_skip_step(progress, "step9"):
+            _log_step("跳过 Step9（已完成）")
+        else:
+            profile = load_report_type_profile(report_type)
+            step7_suffix = profile.get("step7_title_suffix", "学术风格分析报告")
+            polish_input = _find_report(base, step7_suffix, ext=".docx")
+            if not polish_input.is_file():
+                polish_input = _find_report(base, step7_suffix)
+            _log_step("Step9 深度研究专家润色")
+            from src.step9_expert_polish import run_expert_polish
+            run_expert_polish(polish_input, base)
+            save_progress(base, REPORT_DIR, "step9")
+
     from src.llm_client import print_token_summary
     print_token_summary()
-    _log_banner("Step1~Step8 完成，1.0~5.0 已输出至 output/reports")
+    _log_banner("全流程完成，已输出至 output/reports")
 
 
 def cmd_all_context(args):
@@ -514,12 +563,22 @@ def main():
     p0m.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
     p0m.set_defaults(func=cmd_merge)
 
+    p0bp = sub.add_parser("preprocess", help="Step0b: 本地语料预处理（去重/过滤/压缩），零 API 调用")
+    subparsers_map["preprocess"] = p0bp
+    p0bp.add_argument("dir", type=Path, help="语料目录路径")
+    p0bp.add_argument("-o", "--output", default=None, help="输出文件名前缀")
+    p0bp.add_argument("-m", "--mode", default="A", choices=["A", "B", "AB"], help="预处理模式: A=摘要聚类, B=知识图谱, AB=融合")
+    p0bp.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
+    p0bp.set_defaults(func=cmd_preprocess)
+
     p0b2 = sub.add_parser("batch", help="批量流程：目录语料重整 → 1.0 → 专家 → 2.0 → 3.0 最终版")
     subparsers_map["batch"] = p0b2
     p0b2.add_argument("dir", type=Path, help="语料目录路径")
     p0b2.add_argument("-o", "--output", default=None, help="输出文件名前缀")
     p0b2.add_argument("-r", "--recursive", action="store_true", help="递归读取子目录")
-    p0b2.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    p0b2.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C", "D"], help="报告3.0风格(A=商业/B=可行性/C=学术/D=政治评论)")
+    p0b2.add_argument("--preprocess", action="store_true", help="使用 Step0b 本地预处理替代 Step0 API 去重")
+    p0b2.add_argument("-m", "--preprocess-mode", default="A", choices=["A", "B", "AB"], help="预处理模式: A=摘要聚类, B=知识图谱, AB=融合")
     p0b2.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0b2)
     _add_report_type_arg(p0b2)
@@ -559,7 +618,7 @@ def main():
     p5.add_argument("report_v2", help="报告 2.0 路径，如 output/reports/xxx_report_v2.md")
     p5.add_argument("-r", "--raw-file", required=True, help="原始语料路径（必填，用于幻觉校验）")
     p5.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
-    p5.add_argument("-s", "--style", default="A", choices=["A", "B", "C"], help="文档风格: A/B/C")
+    p5.add_argument("-s", "--style", default="A", choices=["A", "B", "C", "D"], help="文档风格: A/B/C/D")
     p5.set_defaults(func=cmd_report_final)
 
     p6 = sub.add_parser("report-v4", help="Step6: 对报告 3.0 做事实核查与出处标注，生成 4.0（含 References）")
@@ -614,11 +673,17 @@ def main():
     _add_report_type_arg(p8)
     p8.set_defaults(func=cmd_report_v5)
 
+    p9 = sub.add_parser("expert-polish", help="Step9: 深度研究专家润色（Perplexity deep research，3 位专家）")
+    subparsers_map["expert-polish"] = p9
+    p9.add_argument("report", help="最终报告路径（如 Step7/Step8 输出）")
+    p9.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
+    p9.set_defaults(func=cmd_expert_polish)
+
     p0 = sub.add_parser("all", help="全流程：导入/抓取 → 报告1.0 → 专家 → 报告2.0 → 报告3.0")
     subparsers_map["all"] = p0
     p0.add_argument("input", help="本地文件路径或分享链接")
     p0.add_argument("-o", "--output", default=None, help="各步骤输出文件名前缀")
-    p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    p0.add_argument("-s", "--final-style", default="A", choices=["A", "B", "C", "D"], help="报告3.0风格(A=商业/B=可行性/C=学术/D=政治评论)")
     p0.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_provider_arg(p0)
     _add_report_type_arg(p0)
@@ -643,10 +708,13 @@ def main():
     pfr.add_argument("-o", "--output-base", default=None, help="输出文件名前缀")
     _add_provider_arg(pfr)
     pfr.add_argument("-r", "--recursive", action="store_true", help="语料目录递归读取")
+    pfr.add_argument("--preprocess", action="store_true", help="使用 Step0b 本地预处理替代 Step0 API 去重")
+    pfr.add_argument("-m", "--preprocess-mode", default="A", choices=["A", "B", "AB"], help="预处理模式: A=摘要聚类, B=知识图谱, AB=融合")
     pfr.add_argument("--policy", default="policy1", help="Step7/Step8 使用的 skill 子目录")
     _add_report_type_arg(pfr)
-    pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C"], help="报告3.0风格")
+    pfr.add_argument("-s", "--style", default="A", choices=["A", "B", "C", "D"], help="报告3.0风格(A=商业/B=可行性/C=学术/D=政治评论)")
     pfr.add_argument("--no-resume", action="store_true", help="禁用断点续跑，强制从头执行")
+    pfr.add_argument("--deep-research", action="store_true", help="启用 Step9 深度研究专家润色（Perplexity）")
     pfr.add_argument("--interactive", action="store_true", help="交互式审阅模式")
     _add_lang_arg(pfr)
     pfr.set_defaults(func=cmd_full_report)

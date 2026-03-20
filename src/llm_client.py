@@ -18,7 +18,7 @@ from config import (
     LLM_PROVIDER,
     KIMI_API_KEY, KIMI_BASE_URL, KIMI_MODEL, KIMI_VISION_MODEL,
     GEMINI_API_KEY, GEMINI_MODEL,
-    GROK_API_KEY, GROK_BASE_URL, GROK_MODEL,
+    GROK_API_KEY, GROK_BASE_URL, GROK_MODEL, GROK_REASONING_MODEL,
     MINIMAX_API_KEY, MINIMAX_BASE_URL, MINIMAX_MODEL,
     GLM_API_KEY, GLM_BASE_URL, GLM_MODEL, GLM_VISION_MODEL,
     QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL,
@@ -289,13 +289,16 @@ def chat(
     model: str = None,
     max_tokens: int = 8192,
     temperature: float = 0.6,
+    reasoning: bool = False,
 ) -> str:
     """
     统一对话接口。provider 未指定时使用环境变量 LLM_PROVIDER（默认 kimi）。
-    优先: kimi, gemini, grok
-    候选: minimax, glm, qwen, deepseek, openai, perplexity, claude
+    reasoning=True 时，Grok 自动切换到推理模型（GROK_REASONING_MODEL）。
     """
     p = (provider or os.getenv("LLM_PROVIDER") or LLM_PROVIDER or "kimi").lower().strip()
+    # Grok 推理模型路由
+    if reasoning and p == "grok" and not model:
+        model = GROK_REASONING_MODEL
     if p == "claude":
         return _claude_chat(messages, model, max_tokens, temperature)
     if p == "gemini":
@@ -360,6 +363,102 @@ def perplexity_chat_with_citations(
                 "url": r["url"],
                 "title": r.get("title") or r["url"],
             })
+    if not citations and data.get("citations"):
+        for c in data["citations"]:
+            u = c if isinstance(c, str) else (c.get("url") or "")
+            if u:
+                citations.append({"url": u, "title": u})
+    return content, citations
+
+
+def perplexity_deep_research(
+    messages: list,
+    max_tokens: int = 8192,
+    poll_interval: float = 5.0,
+    max_wait: float = 300.0,
+) -> tuple[str, list[dict]]:
+    """
+    调用 Perplexity sonar-deep-research（异步模式）。
+    提交请求后轮询直到完成，返回 (content, citations)。
+    """
+    if not PERPLEXITY_API_KEY:
+        raise ValueError("请设置 PERPLEXITY_API_KEY 或在 .env 中配置")
+    base_url = (PROVIDER_CONFIG["perplexity"].get("base_url") or "https://api.perplexity.ai").rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    model = "sonar-deep-research"
+
+    # 1. 提交请求（deep research 耗时较长，用更大超时）
+    deep_timeout = httpx.Timeout(60.0, read=300.0)
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }
+    resp = httpx.post(
+        f"{base_url}/chat/completions",
+        json=payload,
+        headers=headers,
+        timeout=deep_timeout,
+    )
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Perplexity Deep Research 提交失败 {resp.status_code}: {resp.text[:500]}")
+    data = resp.json()
+
+    # 如果直接返回了结果（同步兼容）
+    if data.get("choices"):
+        content, citations = _extract_perplexity_response(data, model)
+        return content, citations
+
+    # 2. 异步模式：轮询
+    request_id = data.get("id") or data.get("request_id")
+    if not request_id:
+        # 无 request_id，尝试直接解析
+        content, citations = _extract_perplexity_response(data, model)
+        return content, citations
+
+    ts = _time.strftime("%H:%M:%S", _time.localtime())
+    print(f"[{ts}] [Deep Research] 已提交，request_id={request_id}，等待完成...", flush=True)
+
+    elapsed = 0.0
+    while elapsed < max_wait:
+        _time.sleep(poll_interval)
+        elapsed += poll_interval
+        try:
+            poll_resp = httpx.get(
+                f"{base_url}/chat/completions/{request_id}",
+                headers=headers,
+                timeout=HTTP_TIMEOUT,
+            )
+            if poll_resp.status_code == 200:
+                poll_data = poll_resp.json()
+                status = poll_data.get("status", "")
+                if status == "completed" or poll_data.get("choices"):
+                    content, citations = _extract_perplexity_response(poll_data, model)
+                    return content, citations
+                if status == "failed":
+                    raise RuntimeError(f"Deep Research 失败: {poll_data}")
+        except httpx.TimeoutException:
+            pass
+
+    raise TimeoutError(f"Deep Research 超时（{max_wait}s），request_id={request_id}")
+
+
+def _extract_perplexity_response(data: dict, model: str) -> tuple[str, list[dict]]:
+    """从 Perplexity 响应中提取 content 和 citations。"""
+    usage = data.get("usage", {})
+    if usage:
+        _tracker.record("perplexity", model, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0))
+    content = ""
+    if data.get("choices") and len(data["choices"]) > 0:
+        msg = data["choices"][0].get("message", {})
+        content = (msg.get("content") or "").strip()
+    citations: list[dict] = []
+    for r in data.get("search_results") or []:
+        if isinstance(r, dict) and r.get("url"):
+            citations.append({"url": r["url"], "title": r.get("title") or r["url"]})
     if not citations and data.get("citations"):
         for c in data["citations"]:
             u = c if isinstance(c, str) else (c.get("url") or "")

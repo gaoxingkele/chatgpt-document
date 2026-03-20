@@ -29,7 +29,8 @@ GEMINI_MODEL = _env("GEMINI_MODEL", "gemini-3.1-pro-preview")
 # ============ xAI（Grok） ============
 GROK_API_KEY = _env("GROK_API_KEY")
 GROK_BASE_URL = "https://api.x.ai/v1"
-GROK_MODEL = _env("GROK_MODEL", "grok-4-1-fast")
+GROK_MODEL = _env("GROK_MODEL", "grok-4-1-fast-non-reasoning")
+GROK_REASONING_MODEL = _env("GROK_REASONING_MODEL", "grok-4.20-0309-reasoning")
 
 # ============ MiniMax ============
 MINIMAX_API_KEY = _env("MINIMAX_API_KEY")
@@ -140,6 +141,16 @@ ARBITRATE_EXPERT_LIMIT = 50_000        # 仲裁时专家意见截取
 # ============ API 调用延迟（秒） ============
 STEP6_CHAPTER_DELAY = float(_env("STEP6_CHAPTER_DELAY", "1.5"))
 STEP8_ITERATION_DELAY = float(_env("STEP8_ITERATION_DELAY", "1"))
+
+# ============ Step0b 语料预处理 ============
+PREPROCESS_MODE = _env("PREPROCESS_MODE", "A")
+PREPROCESS_NEAR_DEDUP_THRESHOLD = 0.85
+PREPROCESS_PARAGRAPH_DEDUP_THRESHOLD = 0.90
+PREPROCESS_MIN_BODY_CHARS = 500
+PREPROCESS_TEXTRANK_SENTENCES = 5
+PREPROCESS_CLUSTER_RANGE = (3, 10)
+PREPROCESS_MAX_REPRESENTATIVES = 3
+PREPROCESS_MINHASH_PERMS = 128
 
 # ============ 支持的文件扩展名 ============
 TEXT_EXTENSIONS = {".txt", ".md", ".json", ".html"}

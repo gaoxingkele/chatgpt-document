@@ -147,6 +147,7 @@ def _call_expert(name: str, system: str, user_msg: str, expert_idx: int) -> tupl
                 ],
                 max_tokens=6144,
                 temperature=0.4,
+                reasoning=True,
             )
         _log(f"[并行] API#{expert_idx} {name} 完成，耗时 {time.time()-t0:.1f}s，意见约 {len(opinion)} 字")
         return name, opinion, ""
@@ -200,6 +201,7 @@ def _arbitrate_experts(combined_text: str, base: str) -> str:
         ],
         max_tokens=8192,
         temperature=0.3,
+        reasoning=True,
     )
     _log(f"仲裁完成，耗时 {time.time()-t0:.1f}s", "arbitrate")
 
