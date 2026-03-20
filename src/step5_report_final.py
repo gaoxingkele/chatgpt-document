@@ -233,6 +233,21 @@ def run_report_final(
             pass
 
     header, chapters = _parse_report_v1_chapters(report_text)
+    # 降级：如果无 ## 章节，尝试按 ### 拆分，或整篇处理
+    if not chapters:
+        _log("[警告] 未找到 ## 章节，尝试按 ### 拆分")
+        import re as _re2
+        parts = _re2.split(r"(?m)^(### .+)$", report_text)
+        if len(parts) > 2:
+            header = parts[0].strip()
+            chapters = []
+            for i in range(1, len(parts) - 1, 2):
+                title = parts[i].strip().lstrip("#").strip()
+                body = parts[i + 1].strip() if i + 1 < len(parts) else ""
+                if body:
+                    chapters.append((title, body))
+        if not chapters:
+            chapters = [("正文", report_text)]
     num_chapters = len(chapters)
 
     source_label = "v1（Step3b 评估驱动）" if eval_result else "v2"

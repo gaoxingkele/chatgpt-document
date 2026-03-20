@@ -59,7 +59,9 @@ def _merge_duplicate_chapters(report_text: str) -> str:
         while j < len(chapters) and _norm(chapters[j][0]) == current_key:
             body += "\n\n" + chapters[j][1]
             j += 1
-        merged_parts.append(f"## {title}\n\n{body}" if not body.strip().startswith("##") else f"## {title}\n\n{body}")
+        # 始终用 ## + 原始标题（去掉可能已有的 ## 前缀）
+        clean_title = title.lstrip("#").strip()
+        merged_parts.append(f"## {clean_title}\n\n{body}")
         i = j
 
     before = len(chapters)
