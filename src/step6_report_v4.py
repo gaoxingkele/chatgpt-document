@@ -25,23 +25,19 @@ def _process_chapter_with_perplexity(chapter_title: str, chapter_body: str) -> t
     将单章内容提交给 Perplexity，让其分析事实、实体、事件并标注引用。
     返回 (带 [1],[2],... 标记的章节正文, 引用列表 [{"url","title"}, ...])
     """
-    prompt = f"""请分析以下章节内容，完成以下任务：
+    prompt = f"""请对以下章节进行事实核查，但**不要在正文中插入任何 [n] 引用标记**。
 
-1. **识别需要出处核查的陈述**：包括具体数据、比例、金额、人物、机构名称、行业标准、技术参数、算法名称、学术论文引用、可验证的事实性陈述。
-2. **检索并标注引用**：利用你的检索能力，为上述陈述找到可靠的外部来源，在对应位置插入引用标记 [1]、[2]、[3]...（按首次出现顺序编号）。
-3. **输出格式**：直接输出修改后的完整章节，包含：
-   - 章标题：{chapter_title}
-   - 正文：在需要引用的陈述后插入空格和 [n]
-   - 不要添加额外的 References 小节（我会统一汇总）
-4. **引用偏好**：
-   - 学术论文优先使用 DOI 链接或 arXiv 链接
-   - 对于已知作者和年份的来源，在返回的 citations 中尽量包含 author 和 year 信息
-   - 优先使用权威学术来源（期刊论文、会议论文、官方文档），其次是权威媒体
-5. **数学公式保留**：章节中的 $...$ 和 $$...$$ 数学公式标记须原样保留，不修改。
+任务：
+1. 核查章节中的关键事实（数据、人物、事件、机构）
+2. 搜索可靠的外部来源验证这些事实
+3. **原样输出章节正文**，不做任何修改、不插入引用标记
+4. 引用来源会通过 API 的 citations 字段自动返回，无需在正文中标注
 
-对于无法找到公开来源的项目内部设计或假设性内容，可不标注。
+重要：保持章节正文的原始可读性，不要添加 [1]、[2] 等标记。数学公式 $...$ 和 $$...$$ 原样保留。
 
 【章节内容】
+## {chapter_title}
+
 {chapter_body}
 """
     try:
@@ -160,16 +156,15 @@ def run_report_v4(
 
         revised, citations = _process_chapter_with_perplexity(ch_title, body_chunk)
 
-        # 按顺序追加引用（与正文 [1],[2] 一一对应，保持编号正确）
+        # 收集引用来源（不在正文插标记）
         for c in citations:
             url = (c.get("url") or "").strip()
             if url:
                 ref_list.append({"url": url, "title": c.get("title") or url})
 
         n_refs_this_chapter = len(citations)
-        # 重编号：本章的 [1],[2],... 改为 [ref_offset+1],[ref_offset+2],...
-        revised = _renumber_citation_markers(revised, ref_offset)
-        ref_offset += n_refs_this_chapter
+        # 清理 LLM 可能仍然插入的 [n] 标记
+        revised = re.sub(r"\s*\[\d+\]", "", revised)
 
         # 确保以章标题开头
         if not revised.strip().startswith("##"):

@@ -89,7 +89,8 @@ def run_preprocess(
     else:
         output_text = _run_mode_a(docs)
 
-    # ========== 输出 ==========
+    # ========== 清理输出：剥离预处理元数据（不让其进入报告正文） ==========
+    output_text = _strip_meta_header(output_text)
 
     output_path = RAW_DIR / f"{output_name}_preprocessed.txt"
     output_path.write_text(output_text, encoding="utf-8")
@@ -104,6 +105,28 @@ def run_preprocess(
     log(f"  耗时: {elapsed:.1f}s")
 
     return output_path
+
+
+def _strip_meta_header(text: str) -> str:
+    """剥离预处理元数据头部，避免统计信息进入报告正文。"""
+    import re
+    # 去掉 "# 语料预处理报告" 及其后的统计行（到第一个 ## 或 --- 为止）
+    text = re.sub(
+        r"^#\s*语料预处理报告.*?(?=^## |\A)",
+        "", text, count=1, flags=re.MULTILINE | re.DOTALL,
+    )
+    # 去掉 "# 知识图谱语料" 开头的统计行
+    text = re.sub(
+        r"^#\s*知识图谱语料.*?\n(?=^## |\n## )",
+        "", text, count=1, flags=re.MULTILINE | re.DOTALL,
+    )
+    # 去掉散落的统计行
+    text = re.sub(r"^-\s*(?:有效文档|聚类数|压缩率|silhouette).*$", "", text, flags=re.MULTILINE)
+    # 去掉 ====...==== 分隔线
+    text = re.sub(r"^={10,}\s*$", "", text, flags=re.MULTILINE)
+    # 清理多余空行
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return text
 
 
 def _run_mode_a(docs):

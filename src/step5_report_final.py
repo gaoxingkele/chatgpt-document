@@ -191,7 +191,13 @@ def _api_convert_chapter_to_prose(
     if common_rules:
         prompt += f"\n\n【写作规范（必须遵守）】\n{common_rules[:3000]}\n"
 
-    system_content = "你是专业的文档改写专家。核心任务：将列表式、大纲式内容改写为自然流畅的叙述文体，同时保持信息完整、逻辑清晰。"
+    system_content = """你是专业的文档改写专家。核心任务：将列表式、大纲式内容改写为自然流畅的叙述文体，同时保持信息完整、逻辑清晰。
+
+严禁：
+- 输出任何预处理统计信息（聚类数、silhouette、压缩率、有效文档数等）
+- 使用"值得注意的是""综上所述""不难发现"等 AI 套话
+- 反复使用相同的过渡词
+- 在正文中出现裸 URL 或 ISO 时间戳"""
     if raw_chunk:
         system_content += " 重要：报告内容须严格忠于原始语料，删除报告 2.0 中未在原始语料出现的新知识、新观点、新数据（视为幻觉）。"
     system_content += " 输出严格为 Markdown。"
